@@ -1,7 +1,26 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function cameraPortal(page: Page, options: { inventoryUnavailable?: boolean; inventoryGate?: () => Promise<void>; viewer?: boolean; busy?: boolean; offline?: boolean; stale?: boolean; lost?: boolean; unauthorized?: boolean; native?: boolean; nativeAuto?: boolean; revisionAfterPoll?: boolean; rejectStart?: boolean; credentialReady?: boolean; credentialLost?: boolean; credentialUnauthorized?: boolean; searchWaiting?: boolean; enrollmentWaiting?: boolean; runtimeDisabled?: boolean } = {}) {
+async function cameraPortal(page: Page, options: { startGate?: () => Promise<void>; onWatch?: (invalidate: () => void) => void; stateRead?: () => number; playing?: boolean; inventoryUnavailable?: boolean; inventoryGate?: () => Promise<void>; viewer?: boolean; busy?: boolean; offline?: boolean; stale?: boolean; lost?: boolean; unauthorized?: boolean; native?: boolean; nativeAuto?: boolean; revisionAfterPoll?: boolean; rejectStart?: boolean; credentialReady?: boolean; credentialLost?: boolean; credentialUnauthorized?: boolean; searchWaiting?: boolean; enrollmentWaiting?: boolean; runtimeDisabled?: boolean } = {}) {
   const posts: { path: string; body: any }[] = [];
+  if (options.playing) {
+    await page.routeWebSocket("**/watch/ws", socket => options.onWatch?.(() => socket.send(JSON.stringify({ type: "invalidate" }))));
+    await page.routeWebSocket("**/fixture-janus", socket => socket.onMessage(raw => {
+      const message = JSON.parse(String(raw));
+      socket.send(JSON.stringify({ janus: "success", transaction: message.transaction,
+        data: { id: message.janus === "create" ? 1 : 2 } }));
+    }));
+    await page.addInitScript(() => {
+      const callbacks = new Map<number, VideoFrameRequestCallback>();
+      let next = 0;
+      HTMLVideoElement.prototype.requestVideoFrameCallback = function(callback) { callbacks.set(++next, callback); return next; };
+      HTMLVideoElement.prototype.cancelVideoFrameCallback = function(id) { callbacks.delete(id); };
+      (window as any).__decodedFrame = () => {
+        const pending = [...callbacks]; callbacks.clear();
+        for (const [, callback] of pending) callback(performance.now(), {} as VideoFrameCallbackMetadata);
+        return pending.length;
+      };
+    });
+  }
   let operation = "";
   let config: any = { video0: { size: "1280x720", fps: 15, bitrate: 1024 }, nightMode: { lightMonitor: false } };
   if (options.nativeAuto) config.video0 = { codec: "h265", size: "", fps: 0, bitrate: 0 };
@@ -50,6 +69,12 @@ async function cameraPortal(page: Page, options: { inventoryUnavailable?: boolea
     if (path.endsWith("/control/status")) data = { agent: { online: !options.offline }, lease: { active: !!options.busy } };
     if (path.endsWith("/control/lease") && request.method() === "POST") data = { lease_id: "11111111-1111-4111-8111-111111111111", keepalive_sec: 10 };
     if (path.endsWith("/stream/start") && options.rejectStart) { await route.fulfill({ status: 422, json: { detail: { code: "camera_h265_unsupported", message: "H.265 недоступен для выбранного источника" } } }); return; }
+    if (path.endsWith("/stream/start") && options.playing) { await options.startGate?.(); data = { stream_instance_id: "fixture-stream", state: "running", media: { janus_ws: "/fixture-janus", mountpoint_id: 1 } }; }
+    if (path.endsWith("/stream/state") && options.stateRead) {
+      const status = options.stateRead();
+      if (status !== 200) { await route.fulfill({ status, json: { detail: "fixture_state_error" } }); return; }
+    }
+    if (path.endsWith("/control/keepalive") && options.playing) data = { renew_status: "server_accepted" };
     if (path === "/api/cameras/4619") { reads++; data = { device_id: 4619, terminal_online: !options.offline, lease_active: !!options.busy, snapshot: snapshot() }; }
     if (path === "/api/cameras/4619/credentials") {
       if (request.method() === "POST") {
@@ -299,7 +324,7 @@ test("camera preparation still expires at its original thirty-second deadline", 
   await page.clock.install();
   // Keep the local watch open: disconnected-watch polling otherwise replaces
   // the transient timeout text with its empty-stream fixture after retirement.
-  await page.routeWebSocket("**/watch/ws", () => {});
+  await page.routeWebSocket("**/watch/ws", socket => options.onWatch?.(() => socket.send(JSON.stringify({ type: "invalidate" }))));
   const posts = await cameraPortal(page, { native: true, enrollmentWaiting: true });
   // install() alone continues wall time during locator/HTTP waits. Freeze before
   // START so the interval below is measured from this attempt, not test setup.
@@ -391,4 +416,59 @@ test("native RTSP admission ignores the legacy RTP inventory availability flag",
   expect(posts.filter(p => p.path.endsWith("/admission/readiness"))).toHaveLength(1);
   expect(posts.find(p => p.path.endsWith("/stream/start"))?.body).toMatchObject({ mode: "camera", source_id: "cam:ip000001", camera_admission_ticket: "opaque-ready" });
   expect(posts.filter(p => p.path.endsWith("/commands"))).toEqual([]);
+});
+
+
+for (const loseFrames of [false, true]) {
+  test(`camera label uses decoded frame freshness without changing stale controls (lost=${loseFrames})`, async ({ page }) => {
+    await page.clock.install();
+    const posts = await cameraPortal(page, { native: true, stale: true, playing: true });
+    await page.getByRole("button", { name: "Начать просмотр", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Остановить просмотр", exact: true })).toBeVisible();
+    // START/ACK/Janus success alone is not evidence of decoded frames.
+    await expect(page.getByText("Неизвестно / нет свежих данных управления", { exact: true })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => (window as any).__decodedFrame())).toBeGreaterThan(0);
+    await page.clock.runFor(1000);
+    await expect(page.getByText("Поток получен", { exact: true })).toBeVisible();
+    await page.getByText("Видео и изображение", { exact: true }).click();
+    await expect(page.getByRole("spinbutton", { name: "Частота кадров, FPS", exact: true })).toBeDisabled();
+    expect(posts.filter(p => p.path.endsWith("/commands"))).toEqual([]);
+    if (loseFrames) {
+      await page.clock.runFor(5001);
+      await expect(page.getByText("Поток получен", { exact: true })).toHaveCount(0);
+      await expect(page.getByText("Неизвестно / нет свежих данных управления", { exact: true })).toBeVisible();
+      await expect(page.getByRole("spinbutton", { name: "Частота кадров, FPS", exact: true })).toBeDisabled();
+    }
+  });
+}
+
+
+test("native watch defers only state GET until START settles and preserves later errors", async ({ page }) => {
+  let invalidate: (() => void) | undefined;
+  let completeStart: (() => void) | undefined;
+  let stateReads = 0;
+  let failState = false;
+  const posts = await cameraPortal(page, { native: true, playing: true,
+    onWatch: send => { invalidate = send; },
+    startGate: () => new Promise<void>(resolve => { completeStart = resolve; }),
+    stateRead: () => { stateReads++; return failState ? 422 : 200; } });
+  await expect.poll(() => !!invalidate).toBe(true);
+  await page.getByRole("button", { name: "Начать просмотр", exact: true }).click();
+  await expect.poll(() => !!completeStart).toBe(true);
+  const before = stateReads;
+  const control = page.waitForResponse(response => response.url().endsWith("/control/status"));
+  invalidate!();
+  await control;
+  expect(stateReads).toBe(before);
+  expect(posts.filter(p => p.path.endsWith("/stream/stop"))).toEqual([]);
+  completeStart!();
+  await expect(page.getByRole("button", { name: "Остановить просмотр", exact: true })).toBeVisible();
+  const normal = page.waitForResponse(response => response.url().includes("/stream/state?"));
+  invalidate!();
+  expect((await normal).status()).toBe(200);
+  expect(stateReads).toBeGreaterThan(before);
+  failState = true;
+  const failed = page.waitForResponse(response => response.url().includes("/stream/state?"));
+  invalidate!();
+  expect((await failed).status()).toBe(422);
 });

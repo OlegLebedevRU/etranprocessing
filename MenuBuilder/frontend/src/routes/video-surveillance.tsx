@@ -474,7 +474,9 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
             }
             return { displays: [], cameras: [] };
           }),
-          getDeviceStreamState(deviceId).catch(() => null),
+          cameraOnly && startAttemptRef.current && !startAttemptRef.current.signal.aborted
+            ? Promise.resolve(null)
+            : getDeviceStreamState(deviceId).catch(() => null),
           getControlStatus(deviceId).catch(() => null),
         ]);
 
@@ -587,7 +589,9 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
       refreshing = true;
       try {
         const [state, control] = await Promise.all([
-          getDeviceStreamState(deviceId).catch(() => null),
+          cameraOnly && startAttemptRef.current && !startAttemptRef.current.signal.aborted
+            ? Promise.resolve(null)
+            : getDeviceStreamState(deviceId).catch(() => null),
           getControlStatus(deviceId).catch(() => null),
         ]);
         if (disposed) return;
@@ -1201,7 +1205,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
                 onClick={() => void (isSessionActive ? stopSession("viewer_stop") : handleViewerConnect(selectedDevice.device_id))}>
                 {isSessionActive ? "Остановить просмотр" : "Начать просмотр"}</Button>}
               {cameraOnly && <CameraSettings key={selectedDevice.device_id} device={selectedDevice.device_id}
-                org={orgId} operator={isOperator} viewing={isSessionActive || streamStage === "starting" || streamStage === "stopping"}
+                org={orgId} operator={isOperator} freshFrames={freshFrames} viewing={isSessionActive || streamStage === "starting" || streamStage === "stopping"}
                 onBusy={setCameraSettingsBusy} />}
             </>
           ) : (
