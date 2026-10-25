@@ -9,6 +9,9 @@
   cancellable UI and correlation-safe compensation of an ambiguous START.
 
 ### Changed
+- Desktop startup keeps its full HTTP START budget after lease acquisition;
+  the camera30s deadline no longer cancels valid desktop starts. Cancellation
+  and stale-response cleanup remain active for both paths.
 - Camera Medium/HD now select low/default media policies without fixed-size
   presets or camera configuration writes. Native Auto remains unchanged.
 - Media HTTP always selects the common v3 header; camera authority headers

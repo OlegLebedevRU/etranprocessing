@@ -94,6 +94,14 @@ shows its stage, is cancellable before a lease exists, and ignores late replies.
 Selection/profile changes cancel that preparation. Authentication middleware must
 not replay ambiguous lease or START mutations.
 
+The original30s overall deadline belongs only to camera preparation/start.
+Desktop retains the same cancellation and stale-response guard without that
+camera deadline: lease acquisition, HTTP START (120s), and Janus signaling keep
+their own bounded waits. Time spent acquiring a lease cannot consume the desktop
+START allowance. A late response after cancellation still triggers scoped cleanup.
+Desktop renew forwards live provider UTC expiry; fixed camera-clock metadata is
+never requested for a desktop descriptor.
+
 Default gates camera_monotonic_runtime_enabled and camera_native_auto_enabled
 remain false; camera_admission_ticket_key remains empty until owner provisioning.
 This source change does not provision them. Exact IoT/MEDIA revisions and packet

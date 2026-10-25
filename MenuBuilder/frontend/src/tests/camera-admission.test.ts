@@ -76,4 +76,14 @@ describe("camera pre-lease admission", () => {
     await vi.advanceTimersByTimeAsync(1000); await rejected;
     expect(attempt.timedOut).toBe(true);
   });
+
+  it("keeps a cancellation-only guard alive across independently bounded desktop phases", async () => {
+    vi.useFakeTimers(); const attempt = new CameraAttempt(null);
+    await vi.advanceTimersByTimeAsync(9000 + 115000);
+    expect(() => attempt.check()).not.toThrow();
+    expect(attempt.timedOut).toBe(false);
+    attempt.cancel();
+    expect(() => attempt.check()).toThrow();
+    expect(attempt.timedOut).toBe(false);
+  });
 });

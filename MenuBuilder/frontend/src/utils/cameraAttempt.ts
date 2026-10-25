@@ -2,9 +2,11 @@
 export class CameraAttempt {
   readonly controller = new AbortController();
   timedOut = false;
-  private timer: ReturnType<typeof setTimeout>;
-  constructor(timeoutMs = 30000) {
-    this.timer = setTimeout(() => { this.timedOut = true; this.cancel(); }, timeoutMs);
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  constructor(timeoutMs: number | null = 30000) {
+    // Desktop requests and Janus transactions own their individual deadlines.
+    // A cancellation-only guard must not shorten START by lease acquisition time.
+    if (timeoutMs !== null) this.timer = setTimeout(() => { this.timedOut = true; this.cancel(); }, timeoutMs);
   }
   get signal() { return this.controller.signal; }
   check() { this.signal.throwIfAborted(); }

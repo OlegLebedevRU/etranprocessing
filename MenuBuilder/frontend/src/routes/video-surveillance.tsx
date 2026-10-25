@@ -785,7 +785,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
     setRefusalNotice(null);
     setStreamStage("starting");
     setStatusText("Проверка камеры…");
-    const attempt = new CameraAttempt();
+    const attempt = new CameraAttempt(cameraOnly ? 30000 : null);
     startAttemptRef.current = attempt;
     playbackAttemptRef.current = attempt;
     const deviceId = selectedDevice.device_id;

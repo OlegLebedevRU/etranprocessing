@@ -295,6 +295,29 @@ test("disabled runtime fails visibly without obtaining a lease", async ({ page }
   expect(posts.filter(p => p.path.endsWith("/control/lease") || p.path.endsWith("/stream/start"))).toEqual([]);
 });
 
+test("camera preparation still expires at its original thirty-second deadline", async ({ page }) => {
+  await page.clock.install();
+  // Keep the local watch open: disconnected-watch polling otherwise replaces
+  // the transient timeout text with its empty-stream fixture after retirement.
+  await page.routeWebSocket("**/watch/ws", () => {});
+  const posts = await cameraPortal(page, { native: true, enrollmentWaiting: true });
+  // install() alone continues wall time during locator/HTTP waits. Freeze before
+  // START so the interval below is measured from this attempt, not test setup.
+  await page.clock.pauseAt(await page.evaluate(() => new Date(Date.now() + 1000)));
+  await page.getByRole("button", { name: "Начать просмотр", exact: true }).click();
+  await expect.poll(() => posts.filter(p => p.path.endsWith("/admission/enrollment")).length).toBeGreaterThan(0);
+  await page.clock.runFor(29000);
+  await expect(page.getByText("Отменить запуск", { exact: true })).toBeVisible();
+  await page.clock.runFor(1001);
+  await expect(page.getByRole("toolbar").getByRole("status")).toHaveText("Ошибка");
+  await expect(page.getByRole("button", { name: "Начать просмотр", exact: true })).toBeEnabled();
+  const pollsAtDeadline = posts.filter(p => p.path.endsWith("/admission/enrollment")).length;
+  await page.clock.fastForward(1000);
+  expect(posts.filter(p => p.path.endsWith("/admission/enrollment"))).toHaveLength(pollsAtDeadline);
+  expect(posts.filter(p => /\/(control\/lease|stream\/start|admission\/readiness)$/.test(p.path))).toEqual([]);
+  expect(posts.filter(p => p.path.endsWith("/admission/prepare"))).toHaveLength(1);
+});
+
 for (const [profile, label] of [["low", "Medium"], ["default", "HD"]] as const) {
   test(`camera ${label} chooses common quality policy without RPC163 or automatic retry`, async ({ page }) => {
     const posts = await cameraPortal(page, { native: true, nativeAuto: true, rejectStart: true });
