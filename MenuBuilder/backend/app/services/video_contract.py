@@ -119,7 +119,13 @@ def validate_iot_state(value: dict[str, Any]) -> dict[str, Any]:
 
 
 async def load_video_status(
-    iot: IotPlatformClient, sn: str, *, org_id: int, user: dict[str, Any]
+    iot: IotPlatformClient,
+    sn: str,
+    *,
+    org_id: int,
+    user: dict[str, Any],
+    camera_contract: str | None = None,
+    expected_stream_instance_id: str | None = None,
 ) -> dict[str, Any]:
     """Enrich an authorized lease snapshot via IoT's full video-state reader."""
     status = await iot.remote_input_status(sn, org_id=org_id, user=user)
@@ -130,10 +136,9 @@ async def load_video_status(
         or lease.get("scope") == "view"
     ):
         return status
-    current_stream = (status.get("agent") or {}).get("stream") or {}
     state_options: dict[str, Any] = {}
-    if current_stream.get("mode") == "camera" or extended_camera(current_stream):
-        state_options["camera_contract"] = True
+    if camera_contract:
+        state_options["camera_contract"] = camera_contract
     try:
         raw = await iot.remote_video_v2(
             sn,
@@ -150,6 +155,12 @@ async def load_video_status(
     stream = validate_iot_state(raw)
     if stream["sn"] != sn or stream["lease_id"] != str(lease["lease_id"]):
         raise HTTPException(409, detail={"code": "lease_mismatch"})
+    if expected_stream_instance_id and (
+        stream["stream_instance_id"] != expected_stream_instance_id
+    ):
+        raise HTTPException(409, detail={"code": "stream_mismatch"})
+    if camera_contract and stream.get("camera_contract_revision") != camera_contract:
+        raise HTTPException(409, detail={"code": "camera_contract_not_negotiated"})
     descriptor = stream["descriptor"]
     stream.update(
         mode=descriptor["source_type"],

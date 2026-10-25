@@ -1,5 +1,15 @@
 # MenuBuilder
 
+## Camera lifecycle context — preparation only, 2026-10-25
+
+Native START uses historical CTLv1 usb-camera presence, so generic readers lost
+the camera bundle and triggered422/cleanup after initial decoded video. Candidate
+persists URL-safe camera13 context in the existing server-owned operation marker
+after validated native START, then uses exact provider identity for state/STOP/
+mountpoint/keepalive and precommit compensation. No schema/locking/frontend
+change; desktop USB does not select camera from presence hints. Root owns live
+acceptance and release authorization.
+
 ## Camera UUID4 attempt boundary — preparation only, 2026-10-25
 
 Actual START reached the camera CTLv1 boundary but failed because BFF generated

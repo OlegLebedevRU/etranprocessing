@@ -1,5 +1,15 @@
 # Changelog — MenuBuilder
 
+## Unreleased — camera lifecycle revision forwarding
+
+- Persist camera13 context in the existing server-owned video session marker
+  only after validated native START. Generic state, mountpoint, STOP and
+  keepalive readers retain the exact five-header bundle despite the producer's
+  historical usb-camera presence token.
+- Fence returned stream identity against the captured provider epoch; retain
+  trusted native context for compensation before the local commit succeeds.
+  Desktop/USB negotiation, frozen schemas and frontend remain unchanged.
+
 ## Unreleased — camera CTLv1 attempt identifiers
 
 - Allocate random UUID4 operation and stream IDs once in the encrypted camera
