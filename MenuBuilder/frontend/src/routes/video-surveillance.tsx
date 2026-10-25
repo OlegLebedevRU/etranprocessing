@@ -202,7 +202,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
   const nativeStartReady = !loadingInventory
     && inventoryDeviceId === selectedDevice?.device_id
     && selectedSourceKey === "camera:cam:ip000001"
-    && !!inventory?.cameras.some(camera => (camera.id || camera.camera_id) === "cam:ip000001" && camera.available !== false);
+    && !!inventory?.cameras.some(camera => (camera.id || camera.camera_id) === "cam:ip000001");
   const [codecPolicy, setCodecPolicy] = useState<CodecPolicy>("auto");
 
   // Статус потока
