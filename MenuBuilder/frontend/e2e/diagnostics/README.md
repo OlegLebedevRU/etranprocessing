@@ -4,6 +4,9 @@ These scripts run only when explicitly invoked against an authorized terminal.
 They use a normal, manually authenticated visible Chrome profile and the portal's
 START/STOP controls. They neither read/export authentication credentials nor change
 leases, source defaults, jitterBufferTarget or browser installation settings.
+The overlay lives only in `study-overlay.mjs`, injected by the explicit study
+script and disposed afterward. It is never imported from production `src`, is
+absent from ordinary builds, and has no URL flag to enable it in the application.
 
 Build the frontend first. Open a separate study Chrome profile with an explicit
 local debugging port and log in normally. Keep the user's ordinary browser open.

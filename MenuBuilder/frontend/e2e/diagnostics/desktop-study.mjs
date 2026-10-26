@@ -6,6 +6,7 @@ import { chromium } from "playwright";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve, extname, sep } from "node:path";
 import { parseArgs } from "node:util";
+import { installStudyOverlay } from "./study-overlay.mjs";
 
 const { values } = parseArgs({ options: Object.fromEntries(["cdp", "url", "display", "phase", "seconds", "out"].map(key => [key, { type: "string" }])) });
 for (const key of ["cdp", "url", "display", "phase", "out"]) if (!values[key]) throw Error(`Missing --${key}`);
@@ -77,8 +78,8 @@ try {
   await page.getByRole("button", { name: "Настройки видео", exact: true }).click();
   await page.getByRole("button", { name: "Запустить трансляцию", exact: true }).click();
   started = true;
-  await page.getByTestId("video-telemetry").waitFor({ timeout: 120000 });
-  await page.waitForFunction(() => document.querySelector("video")?.videoWidth > 0, null, { timeout: 45000 });
+  await page.waitForFunction(() => document.querySelector("video")?.videoWidth > 0, null, { timeout: 120000 });
+  await page.evaluate(installStudyOverlay, { display: values.display });
   await page.evaluate(({ phase, display }) => {
     const state = window.__desktopStudy;
     const video = document.querySelector("video");
@@ -155,6 +156,7 @@ try {
   }
   console.log(JSON.stringify({ phase: values.phase, display: values.display, samples: data.samples.length, frames: data.frames.length, stopped: true }));
 } finally {
+  await page.evaluate(() => window.__desktopStudy?.disposeOverlay?.()).catch(() => {});
   if (tracing && cdp) await cdp.send("Tracing.end").catch(() => {});
   if (started) {
     const stop = page.getByRole("button", { name: "Остановить трансляцию", exact: true });

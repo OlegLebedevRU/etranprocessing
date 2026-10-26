@@ -17,18 +17,6 @@ interface PendingTx {
 export interface VideoReceiveStats {
   framesDecoded: number;
   timestamp: number;
-  id?: string;
-  ssrc?: number;
-  codec?: string;
-  bytesReceived?: number;
-  packetsReceived?: number;
-  packetsLost?: number;
-  framesDropped?: number;
-  framesRendered?: number;
-  freezeCount?: number;
-  totalDecodeTime?: number;
-  jitterBufferDelay?: number;
-  jitterBufferEmittedCount?: number;
 }
 
 export class JanusStreamingClient {
@@ -270,34 +258,22 @@ export class JanusStreamingClient {
   public async getVideoReceiveStats(): Promise<VideoReceiveStats | null> {
     if (!this.pc || this.isDestroyed) return null;
     const reports = await this.pc.getStats();
-    const videos: VideoReceiveStats[] = [];
+    let video: VideoReceiveStats | null = null;
     reports.forEach((report) => {
-      const inbound = report as RTCStats & Partial<VideoReceiveStats> & {
+      const inbound = report as RTCStats & {
         kind?: string;
         mediaType?: string;
-        codecId?: string;
+        framesDecoded?: number;
       };
       if (
         inbound.type === "inbound-rtp" &&
         (inbound.kind === "video" || inbound.mediaType === "video") &&
         typeof inbound.framesDecoded === "number"
       ) {
-        const codec = inbound.codecId ? reports.get(inbound.codecId) as { mimeType?: string } | undefined : undefined;
-        videos.push({
-          id: inbound.id, ssrc: inbound.ssrc,
-          framesDecoded: inbound.framesDecoded, timestamp: inbound.timestamp,
-          codec: codec?.mimeType,
-          bytesReceived: inbound.bytesReceived, packetsReceived: inbound.packetsReceived,
-          packetsLost: inbound.packetsLost, framesDropped: inbound.framesDropped,
-          framesRendered: inbound.framesRendered, freezeCount: inbound.freezeCount,
-          totalDecodeTime: inbound.totalDecodeTime, jitterBufferDelay: inbound.jitterBufferDelay,
-          jitterBufferEmittedCount: inbound.jitterBufferEmittedCount,
-        });
+        video = { framesDecoded: inbound.framesDecoded, timestamp: inbound.timestamp };
       }
     });
-    // This client receives one video track; do not sum unrelated/RTX reports.
-    videos.sort((a, b) => (b.framesDecoded - a.framesDecoded) || (a.id || "").localeCompare(b.id || ""));
-    return videos[0] ?? null;
+    return video;
   }
 
   public async stop(): Promise<void> {

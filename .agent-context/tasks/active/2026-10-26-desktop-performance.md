@@ -1,8 +1,10 @@
 # Desktop performance and visible receiver telemetry
 
-Measurement complete and patch ready for review. Canonical result:
+Measurement complete; owner clarified overlay is test-only. Production src is
+restored to base; only the manual test harness injects an overlay. No production
+deployment is required for this PR. Canonical result:
 [desktop performance handoff](../completed/2026-10-26-desktop-performance.md).
-Production deployment and native timing optimization are not claimed.
+Native timing optimization is not claimed.
 
 ## Task intake
 - Goal: distinguish RTP loss, decode and presentation on terminal773; compare DISPLAY1 and DISPLAY2, then diagnostic A/B/A90s and10minute soak.
@@ -17,7 +19,7 @@ Production deployment and native timing optimization are not claimed.
 ## Progress
 - Base origin/main83b0124, isolated branch feat/desktop-video-observability. Earlier recovery application is already deployed; this is a new measurement task.
 - User approved90s A/B/A plus10minute soak and both displays. OnBeginFrameThrottleVideo flag is diagnostic only; no500ms jitter or camera15FPS preset.
-- Product overlay implemented; verification and live experiments pending. Raw private experiment files remain ignored.
+- Measurements completed. Owner correction applied: overlay exists only in the explicit test harness, production src matches base. Final build,130 unit tests and9 browser tests passed. Raw private experiment files remain ignored.
 
 ## Performance risks
 | Component | Risk/trigger | Impact | Mitigation | Evidence |

@@ -1,13 +1,15 @@
 # MenuBuilder
 
-## Desktop receiver telemetry — patch ready, 2026-10-26
+## Desktop receiver telemetry — diagnostics only, 2026-10-26
 
-Unreleased frontend overlay separates interval RTP loss, inbound/video-element
-drops, decode/rVFC FPS, Mbps, freeze count and decode/jitter residence. Both773
+Owner clarified: overlay belongs only to tests. The final PR restores production
+src exactly to main83b0124; a manual diagnostic harness injects its own overlay.
+It separates RTP loss, inbound/video-element drops, decode/rVFC FPS, Mbps, freeze
+count and decode/jitter residence. Both773
 displays completed90s A/B/A in Chrome155 and DISPLAY1 completed600s. Diagnostic
 OnBeginFrameThrottleVideo flag showed no repeatable gain; source timing is a
-follow-up hypothesis, not an accepted native fix. Workload/CPU/trace limitations
-and pending deployment are explicit in the
+follow-up hypothesis, not an accepted native fix. No production rollout is needed
+for these diagnostic scripts. Workload/CPU/trace limitations are explicit in the
 [measurement handoff](../tasks/completed/2026-10-26-desktop-performance.md).
 
 ## Desktop compatibility — deployed, 2026-10-26

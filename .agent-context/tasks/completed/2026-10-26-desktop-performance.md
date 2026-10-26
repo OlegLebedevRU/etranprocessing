@@ -1,7 +1,10 @@
 # Desktop773: receiver telemetry and performance study
 
-Status: frontend patch verified and ready for review/deployment; measurements
-complete. No product performance gain or native optimization release is claimed.
+Status: diagnostic tooling and measurements only. Owner clarified after the
+initial PR that the overlay must not appear in production. Final changes restore
+all production src files to base83b0124 and inject the overlay exclusively from
+e2e/diagnostics/study-overlay.mjs during an explicitly launched test. There is no
+production change to deploy and no proven native optimization release.
 
 ## Task intake and scope
 
@@ -18,7 +21,17 @@ complete. No product performance gain or native optimization release is claimed.
   Observation never sends input or changes quality. Adaptation remains an
   initiator-owned operation; no automatic adaptation was added.
 
-## Patch
+## Final correction: test-only overlay
+
+Production player, Janus client and route were restored byte-for-byte to the base.
+The React overlay, production metric helper and their source tests were removed.
+The manual harness now installs/disposes its own DOM overlay with interval rates,
+missing/reset/visibility handling and no source/lease writes. Dedicated browser
+fixtures check injection, counters, collapse, disposal and unavailable values.
+The section below records the earlier implementation used for the live study;
+it is not the current production patch.
+
+## Earlier study implementation (superseded)
 
 `janusClient.ts` now exposes optional raw video counters and codec metadata.
 `videoTelemetry.ts` computes interval rates and separates RTP loss, inbound-video
@@ -133,8 +146,11 @@ marks align browser receiveTime with the trace clock for newer runs.
 
 ## Verification and cleanup
 
-- [x] Final build passed;133/133 unit tests;7/7 relevant browser tests including
+- [x] Original study build passed;133/133 unit tests;7/7 relevant browser tests including
   overlay missing values/collapse and slow/cancelled START/refusal flows.
+- [x] After owner correction: build passed;130/130 base unit tests and9/9 browser
+  tests, including2 explicit-injection overlay tests. Production src diff against
+  base83b0124 is empty; built assets contain no overlay markers/text.
 - [x] Both displays real H265 decode;6 A/B/A runs;600s long; final built-source
   DISPLAY2 smoke with visible overlay. No native executable was changed.
 - [x] Long and final smoke: STOP200 and lease DELETE204 confirmed. Two idempotent
@@ -147,9 +163,9 @@ marks align browser receiveTime with the trace clock for newer runs.
   conflict during post-run reading; persistent shared writer fixed and smoke-tested.
 - [x] Read-only changed-file secret scan had no findings; final scan is repeated
   after report/context edits. Python/backend checks N/A: no backend/Python changes.
-- [ ] Production deployment of this frontend patch: intentionally pending the
-  user's requested deployment step. Browser used the local production build with
-  real portal API; this is not evidence the server already serves the overlay.
+- N/A Production deployment: user clarified overlay is test-only; final PR has
+  no production source delta. The earlier live study used the local production
+  build with real portal API; server never served the experimental overlay.
 - [ ] Native timing optimization, independent source workload benchmark and
   causal attribution of every long-run freeze remain unverified.
 
@@ -162,12 +178,12 @@ no PIN/JWT/credentials/private input. The temporary study profile was removed.
 
 | Contract / component | Producer → consumer | Compatibility / risk |
 | --- | --- | --- |
-| Local receive stats | Janus client → UI overlay | optional new fields; old framesDecoded API retained |
+| Diagnostic receive stats | instrumented browser PC → test overlay | injected only; production Janus API restored unchanged |
 | Lease/media contracts | BFF/native/Janus → existing UI | unchanged; viewer observation sends no commands |
 | Sampling | receiver counters/rVFC → overlay |1Hz, single in-flight read, cleanup/reset/stale handling |
 | Trace inference | Chrome native events → study summary | bounded windows; no physical-display guarantee |
 | Native timing | l4capture clock/loop → encoded source | hypothesis only; do not change deadline basis casually |
 
-Next owner: frontend reviewer/deployer for the overlay; native capture owner for
+Next owner: diagnostic tooling reviewer; native capture owner for
 stage-level profiling and a separately verified pacing candidate. Existing
 quality/raster/codec policy and initiator ownership remain authoritative.
