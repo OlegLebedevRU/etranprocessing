@@ -44,8 +44,13 @@ the last applied bitrate; driver refusal and missing confirmation remain explici
 ## Policy and measurements
 
 Only the original publisher runs the browser policy, once per second with no
-overlapping requests. Transport queue pressure or over 2% RTP packet loss in a
-fresh sample cuts the current target by 25%. After five clear seconds with fresh
+overlapping requests. Transport queue pressure, over 200 ms of accumulated track
+delivery delay or over 2% RTP packet loss in a fresh sample cuts the current target
+by 25%. Track delay compares getSynchronizationSources() delivery timestamps with
+the source's 90 kHz RTP progression, relative to the best observed baseline. It
+handles RTP wraps and SSRC changes. It is separate from packet loss; video element
+mediaTime is unsuitable because Chrome can rebase it while video remains queued.
+After five clear seconds with fresh
 transport measurements and decoded frames, recovery adds 10% of the selected
 profile ceiling. The minimum actuator request is 100 kbit/s; the maximum is the
 original profile ceiling (low 2000/default 4000). A driver refusal disables this
@@ -72,8 +77,11 @@ The optional local RTCP APP extension carries producer rate announcements and
 proxy measurements only. It is bound to the current loopback producer/SSRC and
 is not accepted from downstream observers. The proxy never selects bitrate.
 Obsolete complete AUs are discarded with dependency repair. Pressure alone does
-not request another IDR. A fresh IDR already being serialized may finish; an
-acknowledged publisher rate cut invalidates the remainder of an older AU. TLS
+not request another IDR. A fresh IDR already being serialized may finish. A rate
+change preserves in-flight dependencies and does not force an IDR. After a slow
+driver rate change, the worker selects the newest waiting raw frame instead of
+encoding the sample that aged during the change. The existing TCP send window is
+retained; shrinking it to16KB manufactured pressure on a healthy WAN. TLS
 send failure discards the failed connection's unsent bytes rather than resuming
 a partial record as another frame. The local queue budget is 200 ms.
 

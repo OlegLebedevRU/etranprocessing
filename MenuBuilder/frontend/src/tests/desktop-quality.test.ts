@@ -51,3 +51,28 @@ it("retries after an expired/lost control request using fresh actual source repo
   const policy = new DesktopQualityPolicy();
   expect(policy.observe({ ...nominal, status: "unconfirmed", transport_pressure: true }, stat(1), 1000)).toBe(1500);
 });
+
+it("cuts on accumulated receiver delay even when an ordered weak link loses no RTP packets", () => {
+  const policy = new DesktopQualityPolicy();
+  expect(policy.observe(nominal, { ...stat(1), ssrc: 7, sourceTimestamp: 1000, sourceRtpTimestamp: 90000 }, 1000)).toBeNull();
+  expect(policy.observe(nominal, { ...stat(2), ssrc: 7, sourceTimestamp: 2000, sourceRtpTimestamp: 135000 }, 2000)).toBe(1500);
+});
+
+it("keeps idle source gaps and RTP timestamp wraps from manufacturing delay", () => {
+  const policy = new DesktopQualityPolicy();
+  const first = { ...stat(1), ssrc: 7, sourceTimestamp: 1000, sourceRtpTimestamp: 0xffff0000 };
+  expect(policy.observe(nominal, first, 1000)).toBeNull();
+  expect(policy.observe(nominal, { ...stat(4), ssrc: 7, sourceTimestamp: 4000,
+    sourceRtpTimestamp: (first.sourceRtpTimestamp + 270000) >>> 0 }, 4000)).toBeNull();
+});
+
+it("clears accumulated receiver delay after catch-up or a source replacement", () => {
+  const policy = new DesktopQualityPolicy();
+  const sample = (n: number, media: number, ssrc = 7) => ({ ...stat(n), ssrc,
+    sourceTimestamp: n * 1000, sourceRtpTimestamp: media * 90 });
+  expect(policy.observe(nominal, sample(1, 1000), 1000)).toBeNull();
+  expect(policy.observe(nominal, sample(2, 1500), 2000)).toBe(1500);
+  expect(policy.observe(nominal, sample(3, 3000), 3000)).toBeNull();
+  expect(policy.observe(nominal, sample(4, 3300), 4000)).toBe(1500);
+  expect(policy.observe(nominal, sample(5, 10, 8), 5000)).toBeNull();
+});

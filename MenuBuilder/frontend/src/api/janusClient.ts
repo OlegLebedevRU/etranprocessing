@@ -19,6 +19,9 @@ export interface VideoReceiveStats {
   timestamp: number;
   packetsLost?: number;
   packetsReceived?: number;
+  ssrc?: number;
+  sourceRtpTimestamp?: number;
+  sourceTimestamp?: number;
 }
 
 export class JanusStreamingClient {
@@ -268,14 +271,19 @@ export class JanusStreamingClient {
         framesDecoded?: number;
         packetsLost?: number;
         packetsReceived?: number;
+        ssrc?: number;
       };
       if (
         inbound.type === "inbound-rtp" &&
         (inbound.kind === "video" || inbound.mediaType === "video") &&
         typeof inbound.framesDecoded === "number"
       ) {
+        const source = this.pc?.getReceivers().filter(receiver => receiver.track.kind === "video")
+          .flatMap(receiver => receiver.getSynchronizationSources?.() ?? [])
+          .find(source => source.source === inbound.ssrc);
         video = { framesDecoded: inbound.framesDecoded, timestamp: inbound.timestamp,
-          packetsLost: inbound.packetsLost, packetsReceived: inbound.packetsReceived };
+          packetsLost: inbound.packetsLost, packetsReceived: inbound.packetsReceived,
+          ssrc: inbound.ssrc, sourceRtpTimestamp: source?.rtpTimestamp, sourceTimestamp: source?.timestamp };
       }
     });
     return video;
