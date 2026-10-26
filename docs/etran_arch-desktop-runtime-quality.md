@@ -50,6 +50,9 @@ by 25%. Track delay compares getSynchronizationSources() delivery timestamps wit
 the source's 90 kHz RTP progression, relative to the best observed baseline. It
 handles RTP wraps and SSRC changes. It is separate from packet loss; video element
 mediaTime is unsuitable because Chrome can rebase it while video remains queued.
+After confirmed bitrate application, the queue-growth reference is rebased: a
+fixed residual browser playout offset must not pin quality at its minimum after
+the channel clears. Continuing growth still triggers another reduction.
 After five clear seconds with fresh
 transport measurements and decoded frames, recovery adds 10% of the selected
 profile ceiling. The minimum actuator request is 100 kbit/s; the maximum is the

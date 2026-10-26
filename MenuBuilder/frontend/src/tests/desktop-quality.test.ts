@@ -76,3 +76,15 @@ it("clears accumulated receiver delay after catch-up or a source replacement", (
   expect(policy.observe(nominal, sample(4, 3300), 4000)).toBe(1500);
   expect(policy.observe(nominal, sample(5, 10, 8), 5000)).toBeNull();
 });
+
+it("assesses new queue growth after application instead of cutting forever for a fixed residual offset", () => {
+  const policy = new DesktopQualityPolicy();
+  const sample = (n: number, media: number) => ({ ...stat(n), ssrc: 7,
+    sourceTimestamp: n * 1000, sourceRtpTimestamp: media * 90 });
+  expect(policy.observe(nominal, sample(1, 1000), 1000)).toBeNull();
+  expect(policy.observe(nominal, sample(2, 1500), 2000)).toBe(1500);
+  const applied = { ...nominal, applied_kbps: 1500, status: "limited" as const };
+  for (let n = 3; n < 8; n++) expect(policy.observe(applied, sample(n, n * 1000 - 500), n * 1000)).toBeNull();
+  expect(policy.observe(applied, sample(8, 7500), 8000)).toBe(1700);
+  expect(policy.observe(applied, sample(9, 8000), 9000)).toBe(1125);
+});

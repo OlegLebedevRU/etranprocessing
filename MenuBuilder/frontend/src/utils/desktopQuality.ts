@@ -10,6 +10,7 @@ export class DesktopQualityPolicy {
   private clearSince: number | null = null;
   private lastChange = -Infinity;
   private receiverDelayMs = 0;
+  private appliedKbps: number | null = null;
 
   observe(quality: RuntimeQuality, stats: VideoReceiveStats | null, now: number): number | null {
     const previous = this.previous;
@@ -38,6 +39,13 @@ export class DesktopQualityPolicy {
       || !quality.applied_kbps || !quality.ceiling_kbps) {
       this.clearSince = null;
       return null;
+    }
+    if (this.appliedKbps !== quality.applied_kbps) {
+      // Assess new queue growth after an acknowledged actuator change. A
+      // receiver can retain a fixed playout offset after its queue has drained;
+      // repeatedly cutting for that old offset would pin quality at the floor.
+      this.receiverDelayMs = 0;
+      this.appliedKbps = quality.applied_kbps;
     }
     const pressure = (quality.transport_available && quality.transport_pressure === true)
       || this.receiverDelayMs > 200;
