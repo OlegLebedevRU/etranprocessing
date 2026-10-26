@@ -1,5 +1,15 @@
 # MenuBuilder
 
+## Desktop receiver telemetry — patch ready, 2026-10-26
+
+Unreleased frontend overlay separates interval RTP loss, inbound/video-element
+drops, decode/rVFC FPS, Mbps, freeze count and decode/jitter residence. Both773
+displays completed90s A/B/A in Chrome155 and DISPLAY1 completed600s. Diagnostic
+OnBeginFrameThrottleVideo flag showed no repeatable gain; source timing is a
+follow-up hypothesis, not an accepted native fix. Workload/CPU/trace limitations
+and pending deployment are explicit in the
+[measurement handoff](../tasks/completed/2026-10-26-desktop-performance.md).
+
 ## Desktop compatibility — deployed, 2026-10-26
 
 Application main3b59799 deployed with accepted helpera449ec0; BFF ports5004/5005

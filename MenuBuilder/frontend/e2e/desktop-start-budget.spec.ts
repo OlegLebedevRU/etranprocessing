@@ -54,6 +54,13 @@ for (const [leaseDelay, startDelay] of [[0, 35000], [9000, 115000]]) {
     await page.clock.fastForward(startDelay);
     state.start();
     await expect.poll(state.signaling).toBe(1);
+    const telemetry = page.getByTestId("video-telemetry");
+    await expect(telemetry).toBeVisible();
+    await expect(telemetry).toContainText("Статистика недоступна");
+    await expect(telemetry).toContainText("Δ RTP lost: —");
+    await telemetry.getByRole("button", { name: "Параметры трансляции" }).click();
+    await expect(telemetry.getByRole("button")).toHaveAttribute("aria-expanded", "false");
+    await expect(telemetry).not.toContainText("Δ RTP lost");
     expect(state.posts.filter(p => p.path.endsWith("/stream/stop") || p.path.endsWith("/control/release"))).toEqual([]);
     await expect(page.getByText("Время запуска истекло.", { exact: false })).toHaveCount(0);
   });

@@ -14,6 +14,8 @@ import type { DeviceListItem } from "../../api/devices";
 import type { ControlAgentStatus } from "../../api/video";
 import type { RemoteControlStatus } from "../../hooks/useRemoteControl";
 import type { StreamStage } from "./StreamControls";
+import type { VideoReceiveStats } from "../../api/janusClient";
+import { VideoTelemetryOverlay } from "./VideoTelemetryOverlay";
 
 export interface VideoPlayerScreenProps {
   containerRef: React.RefObject<HTMLDivElement | null>;
@@ -30,6 +32,9 @@ export interface VideoPlayerScreenProps {
   isCameraMode: boolean;
   cameraOnly?: boolean;
   streamMode?: string;
+  readVideoStats?: () => Promise<VideoReceiveStats | null>;
+  telemetrySource?: string;
+  telemetrySession?: string;
   onRetryStream?: () => void;
   onRefreshTerminal?: () => void;
   // Remote control
@@ -60,6 +65,9 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
   isCameraMode,
   cameraOnly,
   streamMode,
+  readVideoStats,
+  telemetrySource,
+  telemetrySession,
   onRetryStream,
   onRefreshTerminal,
   rc,
@@ -332,6 +340,8 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
         isCameraMode={isCameraMode}
         streamMode={streamMode}
       />
+
+      {isLive && readVideoStats && <VideoTelemetryOverlay key={telemetrySession || telemetrySource} videoRef={videoRef} readStats={readVideoStats} sourceLabel={telemetrySource} />}
 
       {isFullscreen && <div data-fullscreen-controls onFocus={showFullscreenControls} style={{ position: "absolute", bottom: 12, right: 12, zIndex: 20, display: "flex", gap: 8, opacity: fullscreenControlsVisible ? 1 : 0, pointerEvents: fullscreenControlsVisible ? "auto" : "none", transition: "opacity .2s" }}>
         <Segmented aria-label="Масштаб видео в браузере" value={isControlActive ? "fit" : displayMode} onChange={value => onDisplayMode(value as "fit" | "native")} options={[{ label: "Вписать", value: "fit" }, { label: "Исходный размер", value: "native", disabled: isControlActive }]} />

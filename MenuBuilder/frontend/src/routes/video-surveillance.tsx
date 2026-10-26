@@ -1189,6 +1189,9 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
                 isViewer={isViewer}
                 isCameraMode={cameraOnly || isCameraMode}
                 streamMode={activeStream?.mode}
+                readVideoStats={() => janusClientRef.current?.getVideoReceiveStats() ?? Promise.resolve(null)}
+                telemetrySource={activeSourceLabel || selectedSourceKey}
+                telemetrySession={activeStream?.stream_instance_id}
                 onRetryStream={isOperator ? handleOperatorStart : () => handleViewerConnect(selectedDevice.device_id)}
                 onRefreshTerminal={() => fetchDeviceInfo(selectedDevice.device_id, true)}
                 rc={{
