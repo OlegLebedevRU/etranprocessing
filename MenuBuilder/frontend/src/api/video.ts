@@ -26,6 +26,13 @@ export interface RuntimeQuality {
   transport_pressure?: boolean | null;
   delivery_kbps?: number | null;
   raw_replaced?: number;
+  raster_available?: boolean;
+  raster_step?: number | null;
+  coded_width?: number | null;
+  coded_height?: number | null;
+  initial_width?: number;
+  initial_height?: number;
+  last_idr_bytes?: number | null;
 }
 
 export async function getRuntimeQuality(device: number, stream: string, signal: AbortSignal): Promise<RuntimeQuality> {
@@ -34,9 +41,10 @@ export async function getRuntimeQuality(device: number, stream: string, signal: 
   return data;
 }
 
-export async function setRuntimeQuality(device: number, lease: string, stream: string, kbps: number, writerKey: string, signal: AbortSignal): Promise<void> {
+export async function setRuntimeQuality(device: number, lease: string, stream: string, kbps: number, writerKey: string, signal: AbortSignal, rasterStep?: number): Promise<void> {
   await client.post(`/v1/video/devices/${device}/stream/quality`, {
     lease_id: lease, stream_instance_id: stream, target_bitrate_kbps: kbps, writer_key: writerKey,
+    ...(rasterStep === undefined ? {} : { raster_step: rasterStep }),
   }, { signal });
 }
 export interface VideoDescriptor {

@@ -1202,6 +1202,8 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
                   message="Качество временно снижено для уменьшения задержки"
                 />}
               <VideoPlayerScreen
+                fullSourceFrame={activeStream?.descriptor?.contract_version === 3
+                  && activeStream.descriptor.source_type === "desktop"}
                 cameraOnly={cameraOnly}
                 containerRef={playerContainerRef}
                 displayMode={displayMode} onDisplayMode={setDisplayMode}

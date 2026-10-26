@@ -1475,6 +1475,7 @@ class RuntimeQualityRequest(BaseModel):
     stream_instance_id: uuid.UUID
     writer_key: uuid.UUID
     target_bitrate_kbps: int = Field(ge=100, le=4000)
+    raster_step: int | None = Field(default=None, ge=0, le=31)
 
 
 @router.get("/devices/{device_id}/stream/quality")
@@ -1512,7 +1513,7 @@ async def set_device_stream_quality(
         org_id=org_id,
         user=user,
         lease_id=str(body.lease_id),
-        payload=body.model_dump(mode="json", exclude={"lease_id"}),
+        payload=body.model_dump(mode="json", exclude={"lease_id"}, exclude_none=True),
     )
 
 

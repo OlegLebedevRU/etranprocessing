@@ -14,6 +14,7 @@ export interface RemoteControlOverlayProps {
   isCameraMode?: boolean;
   streamMode?: string;
   debugBorder?: boolean;
+  fullSourceFrame?: boolean;
 }
 
 interface Rect {
@@ -35,6 +36,7 @@ export default function RemoteControlOverlay({
   isCameraMode = false,
   streamMode: propStreamMode,
   debugBorder = true,
+  fullSourceFrame = false,
 }: RemoteControlOverlayProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [desktopRect, setDesktopRect] = useState<Rect | null>(null);
@@ -95,6 +97,13 @@ export default function RemoteControlOverlay({
     const screen = presence?.screen;
     if (screen && screen.virtual_width > 0 && screen.virtual_height > 0) {
       setGeometryKnown(true);
+      if (fullSourceFrame) {
+        // Modern desktop capture fills the coded frame with the selected
+        // source. A lower coded raster does not introduce virtual-screen bars.
+        setDesktopRect({ left: Math.round(contentLeft), top: Math.round(contentTop),
+          width: Math.round(contentWidth), height: Math.round(contentHeight) });
+        return;
+      }
       const desktopAspect = screen.virtual_width / screen.virtual_height;
 
       let dLeft = contentLeft;
@@ -130,7 +139,7 @@ export default function RemoteControlOverlay({
         height: Math.round(contentHeight),
       });
     }
-  }, [presence?.screen, videoRef]);
+  }, [presence?.screen, videoRef, fullSourceFrame]);
 
   // Recalculate on resize, presence change, or video load
   useEffect(() => {
@@ -145,16 +154,25 @@ export default function RemoteControlOverlay({
     resizeObserver.observe(container);
 
     const video = videoRef.current;
+    const onVideoResize = () => {
+      const drag = dragStartRef.current;
+      dragStartRef.current = null;
+      if (drag) {
+        suppressClickRef.current = true;
+        if (container.hasPointerCapture(drag.pointerId)) container.releasePointerCapture(drag.pointerId);
+      }
+      updateRects();
+    };
     if (video) {
       video.addEventListener("loadedmetadata", updateRects);
-      video.addEventListener("resize", updateRects);
+      video.addEventListener("resize", onVideoResize);
     }
 
     return () => {
       resizeObserver.disconnect();
       if (video) {
         video.removeEventListener("loadedmetadata", updateRects);
-        video.removeEventListener("resize", updateRects);
+        video.removeEventListener("resize", onVideoResize);
       }
     };
   }, [updateRects, videoRef, active]);

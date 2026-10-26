@@ -16,6 +16,7 @@ interface PendingTx {
 
 export interface VideoReceiveStats {
   framesDecoded: number;
+  framesReceived?: number;
   timestamp: number;
   packetsLost?: number;
   packetsReceived?: number;
@@ -269,6 +270,7 @@ export class JanusStreamingClient {
         kind?: string;
         mediaType?: string;
         framesDecoded?: number;
+        framesReceived?: number;
         packetsLost?: number;
         packetsReceived?: number;
         ssrc?: number;
@@ -276,12 +278,12 @@ export class JanusStreamingClient {
       if (
         inbound.type === "inbound-rtp" &&
         (inbound.kind === "video" || inbound.mediaType === "video") &&
-        typeof inbound.framesDecoded === "number"
+        (typeof inbound.framesDecoded === "number" || typeof inbound.framesReceived === "number")
       ) {
         const source = this.pc?.getReceivers().filter(receiver => receiver.track.kind === "video")
           .flatMap(receiver => receiver.getSynchronizationSources?.() ?? [])
           .find(source => source.source === inbound.ssrc);
-        video = { framesDecoded: inbound.framesDecoded, timestamp: inbound.timestamp,
+        video = { framesDecoded: inbound.framesDecoded ?? 0, framesReceived: inbound.framesReceived, timestamp: inbound.timestamp,
           packetsLost: inbound.packetsLost, packetsReceived: inbound.packetsReceived,
           ssrc: inbound.ssrc, sourceRtpTimestamp: source?.rtpTimestamp, sourceTimestamp: source?.timestamp };
       }
