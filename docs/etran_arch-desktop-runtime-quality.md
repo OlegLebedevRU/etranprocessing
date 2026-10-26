@@ -45,14 +45,17 @@ the last applied bitrate; driver refusal and missing confirmation remain explici
 
 Only the original publisher runs the browser policy, once per second with no
 overlapping requests. Transport queue pressure or over 200 ms of accumulated track
-delivery delay halves the current target; over 2% RTP packet loss alone cuts it
-by25%. Track delay compares getSynchronizationSources() delivery timestamps with
+delivery delay halves the current target. RTP loss alone does not prove congestion
+and does not issue rate commands or block recovery. Track delay compares
+[getSynchronizationSources()](https://www.w3.org/TR/webrtc/#dom-rtcrtpreceiver-getsynchronizationsources)
+delivery timestamps with
 the source's 90 kHz RTP progression, relative to the best observed baseline. It
 handles RTP wraps and SSRC changes. It is separate from packet loss; video element
 mediaTime is unsuitable because Chrome can rebase it while video remains queued.
 After confirmed bitrate application, the queue-growth reference is rebased: a
 fixed residual browser playout offset must not pin quality at its minimum after
-the channel clears. Continuing growth still triggers another reduction.
+the channel clears. At the actuator floor, an unsuccessful further cut also
+rebases this reference; continuing growth still prevents recovery.
 After five clear seconds with fresh
 transport measurements and decoded frames, recovery adds 10% of the selected
 profile ceiling. The minimum actuator request is 100 kbit/s; the maximum is the

@@ -18,11 +18,31 @@ it("does not mistake stalled decoding/compositing or an idle low bitrate desktop
   for (let i = 0; i < 10; i++) expect(policy.observe({ ...nominal, delivery_kbps: 50 }, stat(i, 0, 0), i * 1000)).toBeNull();
 });
 
-it("uses RTP loss deltas rather than a cumulative historical loss", () => {
+it("does not mistake RTP loss alone for measured congestion", () => {
   const policy = new DesktopQualityPolicy();
   expect(policy.observe(nominal, stat(1, 100), 1000)).toBeNull();
   expect(policy.observe(nominal, stat(2, 100), 2000)).toBeNull();
-  expect(policy.observe(nominal, stat(3, 105), 3000)).toBe(1500);
+  expect(policy.observe(nominal, stat(3, 105), 3000)).toBeNull();
+});
+
+it("can recover despite isolated RTP losses when no queue is growing", () => {
+  const policy = new DesktopQualityPolicy();
+  const limited = { ...nominal, applied_kbps: 1000, status: "limited" as const };
+  for (let i = 0; i <= 5; i++) expect(policy.observe(limited, stat(i, i * 20), i * 1000)).toBeNull();
+  expect(policy.observe(limited, stat(6, 120), 6000)).toBe(1200);
+});
+
+it("does not pin the actuator floor for a fixed offset, but cannot recover while delay keeps growing", () => {
+  const floor = { ...nominal, applied_kbps: 100, status: "limited" as const };
+  const sample = (n: number, media: number) => ({ ...stat(n), ssrc: 7,
+    sourceTimestamp: n * 1000, sourceRtpTimestamp: media * 90 });
+  const policy = new DesktopQualityPolicy();
+  expect(policy.observe(floor, sample(1, 1000), 1000)).toBeNull();
+  expect(policy.observe(floor, sample(2, 1500), 2000)).toBeNull();
+  for (let n = 3; n < 8; n++) expect(policy.observe(floor, sample(n, n * 1000 - 500), n * 1000)).toBeNull();
+  expect(policy.observe(floor, sample(8, 7500), 8000)).toBe(300);
+  const growing = new DesktopQualityPolicy();
+  for (let n = 1; n < 20; n++) expect(growing.observe(floor, sample(n, n * 500), n * 1000)).toBeNull();
 });
 
 it("recovers gradually only with fresh source feedback and decoded frames, never above the selected ceiling", () => {

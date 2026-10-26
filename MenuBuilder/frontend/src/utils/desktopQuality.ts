@@ -2,7 +2,7 @@ import type { RuntimeQuality } from "../api/video";
 import type { VideoReceiveStats } from "../api/janusClient";
 
 /** Only the publisher runs this policy. Transport reports never issue commands.
- * Halve on queue pressure/delay; cut 25% on >2% RTP loss. Recover 10% of the selected ceiling
+ * Halve on queue pressure/delay; recover 10% of the selected ceiling
  * after five clear seconds. Decoder/compositor drops do not measure network loss.
  */
 export class DesktopQualityPolicy {
@@ -28,12 +28,9 @@ export class DesktopQualityPolicy {
     } else this.receiverDelayMs = 0;
     const received = stats && previous && stats.packetsReceived !== undefined && previous.packetsReceived !== undefined
       ? stats.packetsReceived - previous.packetsReceived : 0;
-    const lost = stats && previous && stats.packetsLost !== undefined && previous.packetsLost !== undefined
-      ? Math.max(0, stats.packetsLost - previous.packetsLost) : 0;
     const validNetwork = !!stats && !!previous && stats.timestamp > previous.timestamp && received >= 0
       && stats.packetsReceived !== undefined && previous.packetsReceived !== undefined
       && stats.packetsLost !== undefined && previous.packetsLost !== undefined;
-    const loss = validNetwork && lost > 0 && lost / (received + lost) > 0.02;
     if (!quality.available || (quality.report_age_ms ?? Infinity) >= 3000
       || quality.status === "unsupported"
       || !quality.applied_kbps || !quality.ceiling_kbps) {
@@ -49,12 +46,13 @@ export class DesktopQualityPolicy {
     }
     const pressure = (quality.transport_available && quality.transport_pressure === true)
       || this.receiverDelayMs > 200;
-    if (pressure || loss) this.clearSince = null;
+    if (pressure) this.clearSince = null;
     if (quality.status === "pending" || now - this.lastChange < 1000) return null;
     const current = quality.applied_kbps, ceiling = quality.ceiling_kbps;
     let target: number | null = null;
-    if (pressure || loss) {
-      target = Math.max(100, Math.floor(current * (pressure ? 0.5 : 0.75)));
+    if (pressure) {
+      target = Math.max(100, Math.floor(current * 0.5));
+      if (target === current) this.receiverDelayMs = 0; // No actuator headroom: avoid retaining an old offset forever.
     } else if (quality.transport_available && validNetwork && received > 0
       && previous && stats && stats.framesDecoded > previous.framesDecoded) {
       this.clearSince ??= now;
