@@ -12,6 +12,7 @@ export interface SessionConfig {
   streamInstanceId: string;
   keepaliveIntervalMs?: number;
   publisherOwned?: boolean;
+  qualityWriterKey?: string;
 }
 
 export interface SessionCallbacks {

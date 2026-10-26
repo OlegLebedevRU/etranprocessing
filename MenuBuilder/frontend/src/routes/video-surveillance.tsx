@@ -39,6 +39,7 @@ import { listTerminalsSettings } from "../api/settings";
 import { JanusStreamingClient } from "../api/janusClient";
 import { useSession } from "../session/SessionContext";
 import { useRemoteControl } from "../hooks/useRemoteControl";
+import { useDesktopQuality } from "../hooks/useDesktopQuality";
 import { hasPermission, PERMISSION_VIDEO_VIEW } from "../utils/permissions";
 
 // Новые переработанные UX/UI компоненты
@@ -386,6 +387,21 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
       },
     })
   );
+
+  const readQualityStats = useCallback(async () =>
+    janusClientRef.current?.getVideoReceiveStats() ?? null, []);
+  const coordinatedSession = coordinatorRef.current.session;
+  const runtimeQuality = useDesktopQuality(
+    isSessionActive && activeStream?.mode === "desktop" && activeStream.stream_instance_id
+      && selectedDevice ? {
+        device: selectedDevice.device_id,
+        lease: coordinatedSession?.leaseId ?? "",
+        stream: activeStream.stream_instance_id,
+        writerKey: coordinatedSession?.qualityWriterKey,
+        publisher: coordinatedSession?.publisherOwned !== false
+          && coordinatedSession?.streamInstanceId === activeStream.stream_instance_id
+          && !!coordinatedSession?.leaseId,
+      } : null, readQualityStats);
 
   const rc = useRemoteControl({
     deviceId: selectedDevice?.device_id ?? null,
@@ -833,6 +849,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
       const colonIdx = selectedSourceKey.indexOf(":");
       const mode = colonIdx !== -1 ? selectedSourceKey.slice(0, colonIdx) : "desktop";
       const source_id = colonIdx !== -1 ? selectedSourceKey.slice(colonIdx + 1) : "0";
+      const qualityWriterKey = !cameraOnly && mode === "desktop" ? crypto.randomUUID() : undefined;
       setStatusText("Запуск видеопотока на терминале...");
 
       const startRes = await startDeviceStream(selectedDevice.device_id, {
@@ -843,7 +860,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
         codec_policy: codecPolicy,
         browser_codecs: browserVideoCodecs(),
         ...(cameraOnly ? { camera_admission_ticket: admissionTicket } : {}),
-      });
+      }, qualityWriterKey);
       attempt.check();
       const sessionData = startRes.media;
       if (!sessionData) throw new Error("Media route unavailable");
@@ -853,6 +870,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
         deviceId: selectedDevice.device_id,
         leaseId: leaseRes.lease_id,
         streamInstanceId: startRes.stream_instance_id,
+        qualityWriterKey,
         keepaliveIntervalMs: (leaseRes.keepalive_sec ? Math.min(leaseRes.keepalive_sec / 2, 5) : 5) * 1000,
       });
 
@@ -1176,6 +1194,13 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
                   onSendShortcut: rc.sendShortcut, onSendKey: rc.sendKey, lastCommandResult: rc.lastClickResult, isMobile,
                 }}
               />
+              {runtimeQuality?.available && runtimeQuality.applied_kbps !== undefined
+                && runtimeQuality.ceiling_kbps !== undefined
+                && runtimeQuality.applied_kbps < runtimeQuality.ceiling_kbps
+                && (runtimeQuality.report_age_ms ?? Infinity) < 3000 && <Alert
+                  type="warning" showIcon
+                  message="Качество временно снижено для уменьшения задержки при перегрузке канала"
+                />}
               <VideoPlayerScreen
                 cameraOnly={cameraOnly}
                 containerRef={playerContainerRef}

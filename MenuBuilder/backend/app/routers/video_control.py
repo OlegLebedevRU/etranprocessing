@@ -5,7 +5,7 @@ import logging
 import time
 import uuid
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 
 import websockets
@@ -13,6 +13,7 @@ import websockets.exceptions
 from fastapi import (
     APIRouter,
     Depends,
+    Header,
     HTTPException,
     Query,
     Response,
@@ -920,6 +921,9 @@ async def start_device_stream(
     body: StreamStartRequest,
     user: dict[str, Any] = Depends(require_operator_user),
     db: AsyncSession = Depends(get_db),
+    quality_writer_key: Annotated[
+        uuid.UUID | None, Header(alias="X-Video-Quality-Writer")
+    ] = None,
 ) -> StreamStartResponse | JSONResponse:
     """Start or switch media stream on terminal (requires stream lease)."""
     terminal = await _verify_device_access(device_id, user, db, require_active=True)
@@ -1050,6 +1054,11 @@ async def start_device_stream(
             status=current,
             org_id=org_id,
             user=user,
+            **(
+                {"quality_writer_key": str(quality_writer_key)}
+                if quality_writer_key is not None and body.mode == "desktop"
+                else {}
+            ),
         )
         if extended is None:
             # New H264 requests keep the existing route-before-start adapter.
@@ -1458,6 +1467,53 @@ async def stop_device_stream(
             await _stop_active_media_session(terminal.sn, lease_id, stream_instance_id)
             return StreamStopResponse(result="stopped")
         raise
+
+
+class RuntimeQualityRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    lease_id: uuid.UUID
+    stream_instance_id: uuid.UUID
+    writer_key: uuid.UUID
+    target_bitrate_kbps: int = Field(ge=100, le=4000)
+
+
+@router.get("/devices/{device_id}/stream/quality")
+async def get_device_stream_quality(
+    device_id: int,
+    stream_instance_id: uuid.UUID,
+    user: dict[str, Any] = Depends(require_permission(PERMISSION_VIDEO_VIEW)),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    terminal = await _verify_device_access(device_id, user, db)
+    org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
+    return await iot_client.remote_video_v2(
+        terminal.sn,
+        "quality-read",
+        org_id=org_id,
+        user=user,
+        payload={"stream_instance_id": str(stream_instance_id)},
+    )
+
+
+@router.post("/devices/{device_id}/stream/quality")
+async def set_device_stream_quality(
+    device_id: int,
+    body: RuntimeQualityRequest,
+    user: dict[str, Any] = Depends(require_operator_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    terminal = await _verify_device_access(device_id, user, db, require_active=True)
+    org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
+    # app1 checks the immutable START owner, including for superusers. Neither
+    # device visibility nor an operator role grants runtime quality authority.
+    return await iot_client.remote_video_v2(
+        terminal.sn,
+        "quality-set",
+        org_id=org_id,
+        user=user,
+        lease_id=str(body.lease_id),
+        payload=body.model_dump(mode="json", exclude={"lease_id"}),
+    )
 
 
 @router.get(

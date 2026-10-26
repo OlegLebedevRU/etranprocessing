@@ -13,6 +13,32 @@ export interface VideoSessionResponse {
 }
 
 export type CodecPolicy = "auto" | "h264" | "h265";
+export interface RuntimeQuality {
+  available: boolean;
+  ceiling_kbps?: number;
+  applied_kbps?: number;
+  generation?: number;
+  requested_generation?: number;
+  status?: "nominal" | "limited" | "pending" | "unsupported" | "unconfirmed";
+  report_age_ms?: number;
+  transport_available?: boolean;
+  transport_age_ms?: number | null;
+  transport_pressure?: boolean | null;
+  delivery_kbps?: number | null;
+  raw_replaced?: number;
+}
+
+export async function getRuntimeQuality(device: number, stream: string, signal: AbortSignal): Promise<RuntimeQuality> {
+  const { data } = await client.get<RuntimeQuality>(`/v1/video/devices/${device}/stream/quality`,
+    { params: { stream_instance_id: stream }, signal });
+  return data;
+}
+
+export async function setRuntimeQuality(device: number, lease: string, stream: string, kbps: number, writerKey: string, signal: AbortSignal): Promise<void> {
+  await client.post(`/v1/video/devices/${device}/stream/quality`, {
+    lease_id: lease, stream_instance_id: stream, target_bitrate_kbps: kbps, writer_key: writerKey,
+  }, { signal });
+}
 export interface VideoDescriptor {
   contract_version: 3;
   descriptor_revision: string;
@@ -328,13 +354,15 @@ export async function startDeviceStream(
     codec_policy?: CodecPolicy;
     camera_admission_ticket?: string;
     browser_codecs?: { h264: boolean | null; h265: boolean | null; checked_at_ms: number; valid_until_ms: number };
-  }
+  },
+  qualityWriterKey?: string
 ): Promise<StreamStartResponse> {
   const { data } = await client.post<StreamStartResponse>(
     `/v1/video/devices/${deviceId}/stream/start`,
     payload,
     // No auth interceptor replay after an ambiguous accepted camera/desktop START.
-    { _retry: true, timeout: payload.mode === "desktop" ? 120000 : 40000 } as AxiosRequestConfig
+    { _retry: true, timeout: payload.mode === "desktop" ? 120000 : 40000,
+      ...(qualityWriterKey ? { headers: { "X-Video-Quality-Writer": qualityWriterKey } } : {}) } as AxiosRequestConfig
   );
   return data;
 }
