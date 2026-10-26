@@ -9,7 +9,7 @@ const stat = (n: number, lost = 0, decoded = n * 10) => ({ timestamp: n * 1000,
 
 it("cuts on measured upstream queue pressure, independent of browser frame drops", () => {
   const policy = new DesktopQualityPolicy();
-  expect(policy.observe({ ...nominal, transport_pressure: true }, stat(1), 1000)).toBe(1500);
+  expect(policy.observe({ ...nominal, transport_pressure: true }, stat(1), 1000)).toBe(1000);
   expect(policy.observe({ ...nominal, status: "pending", transport_pressure: true }, stat(2), 2000)).toBeNull();
 });
 
@@ -49,13 +49,13 @@ it("never infers spare bandwidth from absent measurements", () => {
 
 it("retries after an expired/lost control request using fresh actual source reports", () => {
   const policy = new DesktopQualityPolicy();
-  expect(policy.observe({ ...nominal, status: "unconfirmed", transport_pressure: true }, stat(1), 1000)).toBe(1500);
+  expect(policy.observe({ ...nominal, status: "unconfirmed", transport_pressure: true }, stat(1), 1000)).toBe(1000);
 });
 
 it("cuts on accumulated receiver delay even when an ordered weak link loses no RTP packets", () => {
   const policy = new DesktopQualityPolicy();
   expect(policy.observe(nominal, { ...stat(1), ssrc: 7, sourceTimestamp: 1000, sourceRtpTimestamp: 90000 }, 1000)).toBeNull();
-  expect(policy.observe(nominal, { ...stat(2), ssrc: 7, sourceTimestamp: 2000, sourceRtpTimestamp: 135000 }, 2000)).toBe(1500);
+  expect(policy.observe(nominal, { ...stat(2), ssrc: 7, sourceTimestamp: 2000, sourceRtpTimestamp: 135000 }, 2000)).toBe(1000);
 });
 
 it("keeps idle source gaps and RTP timestamp wraps from manufacturing delay", () => {
@@ -71,9 +71,9 @@ it("clears accumulated receiver delay after catch-up or a source replacement", (
   const sample = (n: number, media: number, ssrc = 7) => ({ ...stat(n), ssrc,
     sourceTimestamp: n * 1000, sourceRtpTimestamp: media * 90 });
   expect(policy.observe(nominal, sample(1, 1000), 1000)).toBeNull();
-  expect(policy.observe(nominal, sample(2, 1500), 2000)).toBe(1500);
+  expect(policy.observe(nominal, sample(2, 1500), 2000)).toBe(1000);
   expect(policy.observe(nominal, sample(3, 3000), 3000)).toBeNull();
-  expect(policy.observe(nominal, sample(4, 3300), 4000)).toBe(1500);
+  expect(policy.observe(nominal, sample(4, 3300), 4000)).toBe(1000);
   expect(policy.observe(nominal, sample(5, 10, 8), 5000)).toBeNull();
 });
 
@@ -82,9 +82,9 @@ it("assesses new queue growth after application instead of cutting forever for a
   const sample = (n: number, media: number) => ({ ...stat(n), ssrc: 7,
     sourceTimestamp: n * 1000, sourceRtpTimestamp: media * 90 });
   expect(policy.observe(nominal, sample(1, 1000), 1000)).toBeNull();
-  expect(policy.observe(nominal, sample(2, 1500), 2000)).toBe(1500);
-  const applied = { ...nominal, applied_kbps: 1500, status: "limited" as const };
+  expect(policy.observe(nominal, sample(2, 1500), 2000)).toBe(1000);
+  const applied = { ...nominal, applied_kbps: 1000, status: "limited" as const };
   for (let n = 3; n < 8; n++) expect(policy.observe(applied, sample(n, n * 1000 - 500), n * 1000)).toBeNull();
-  expect(policy.observe(applied, sample(8, 7500), 8000)).toBe(1700);
-  expect(policy.observe(applied, sample(9, 8000), 9000)).toBe(1125);
+  expect(policy.observe(applied, sample(8, 7500), 8000)).toBe(1200);
+  expect(policy.observe(applied, sample(9, 8000), 9000)).toBe(500);
 });

@@ -2,7 +2,7 @@ import type { RuntimeQuality } from "../api/video";
 import type { VideoReceiveStats } from "../api/janusClient";
 
 /** Only the publisher runs this policy. Transport reports never issue commands.
- * Cut 25% on queue pressure, growing receiver delay or >2% RTP loss; recover 10% of the selected ceiling
+ * Halve on queue pressure/delay; cut 25% on >2% RTP loss. Recover 10% of the selected ceiling
  * after five clear seconds. Decoder/compositor drops do not measure network loss.
  */
 export class DesktopQualityPolicy {
@@ -54,7 +54,7 @@ export class DesktopQualityPolicy {
     const current = quality.applied_kbps, ceiling = quality.ceiling_kbps;
     let target: number | null = null;
     if (pressure || loss) {
-      target = Math.max(100, Math.floor(current * 0.75));
+      target = Math.max(100, Math.floor(current * (pressure ? 0.5 : 0.75)));
     } else if (quality.transport_available && validNetwork && received > 0
       && previous && stats && stats.framesDecoded > previous.framesDecoded) {
       this.clearSince ??= now;

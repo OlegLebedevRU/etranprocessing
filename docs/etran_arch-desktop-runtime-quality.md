@@ -44,9 +44,9 @@ the last applied bitrate; driver refusal and missing confirmation remain explici
 ## Policy and measurements
 
 Only the original publisher runs the browser policy, once per second with no
-overlapping requests. Transport queue pressure, over 200 ms of accumulated track
-delivery delay or over 2% RTP packet loss in a fresh sample cuts the current target
-by 25%. Track delay compares getSynchronizationSources() delivery timestamps with
+overlapping requests. Transport queue pressure or over 200 ms of accumulated track
+delivery delay halves the current target; over 2% RTP packet loss alone cuts it
+by25%. Track delay compares getSynchronizationSources() delivery timestamps with
 the source's 90 kHz RTP progression, relative to the best observed baseline. It
 handles RTP wraps and SSRC changes. It is separate from packet loss; video element
 mediaTime is unsuitable because Chrome can rebase it while video remains queued.
