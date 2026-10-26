@@ -1199,7 +1199,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
                 && runtimeQuality.applied_kbps < runtimeQuality.ceiling_kbps
                 && (runtimeQuality.report_age_ms ?? Infinity) < 3000 && <Alert
                   type="warning" showIcon
-                  message="Качество временно снижено для уменьшения задержки при перегрузке канала"
+                  message="Качество временно снижено для уменьшения задержки"
                 />}
               <VideoPlayerScreen
                 cameraOnly={cameraOnly}
