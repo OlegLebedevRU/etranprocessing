@@ -122,3 +122,39 @@ Host metrics sampler97612 started around00:03 for22min; may need extending for s
 Native private host-latency.jsonl records global CPU/GPU and capture resources.
 Private wrapper remote tools directory must be removed after use; retain candidate
 JSON manifests referenced by Compose labels. Exit controller retains installed EXEs.
+
+## Current authorized extension (2026-10-27)
+
+Owner chose temporary resolution reduction to prioritize delay, and requires
+compression-efficient size steps. Use2:1 per side (quarter pixel count), preserve
+aspect/chroma validity and verify actual IDR bytes. Owner asked about software
+H264: existing runtime adaptation was HEVC/MF-only; acknowledged this gap. Latest
+software H264 must join the same original-initiator channel. Old pre-HEVC agents
+may ignore unsupported features or be retired/updated; no legacy START expansion
+is required. Do not introduce another writer, source/display changes or signing.
+
+Queue-only/floor controller is committed1374f87 and mergedPR133 as1b6288c.
+DISPLAY1 final trial: A1/B/A2 decoded9.76/9.00/9.68FPS; B loss0, median added lag
+0.488sec,p954.47sec,max5.45sec; restored2000kbps. Full3k IDR470KB physically needs
+3.8sec at1Mbps. This motivates authorized raster work, not a false200ms guarantee.
+Frontend1b6288c is NOT deployed: builder86410 ran frontend tests/build successfully
+but registry push failed on id.cloud.ru DNS (confirmed buildx history logs).
+Do not redo obsolete builds until the raster/H264 code is ready. Final10min gate
+must use the combined implementation. App1c86cd55 remains deployed and healthy.
+
+Current native work after34182bb now includes software H264 worker/rate control,
+GDI/OpenH264 encoded capability proof and modern H264 START, optional raster IPC,
+area/box reduction and asynchronous encoder rebuild with rollback. GPU fingerprint
+is not required for software readiness; the helper component remains bound.
+13 live tests and10 scale tests pass on each architecture; adapter and capability
+fixtures pass on both. Capture/desk unsigned builds pass; no new EXEs installed.
+app1 has190 scoped tests passing; BFF4; frontend17 policy tests and production build.
+Working app1/MenuBuilder branches now both feat/desktop-runtime-raster, based on
+accepted c86cd55/1b6288c respectively. Current extensions are not deployed.
+
+Detailed current scheme/evidence and remaining gates:
+[raster draft](2026-10-27-desktop-raster-adaptation-draft.md).
+Next: finish review/checks, coordinated candidate release, actual browser H264/H265
+on both displays, weak-link recovery and10min soak. Source-side IDR confirmation
+does not establish receiver backlog removal; test that separately. No final
+performance acceptance or native signing/publication yet.

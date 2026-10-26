@@ -1,5 +1,9 @@
 # Active task packets
 
+- [Desktop raster adaptation — draft](2026-10-27-desktop-raster-adaptation-draft.md) —
+  original-initiator channel,2:1 raster steps, software H264, live geometry/input
+  invariants and outstanding decoder/queue acceptance gates.
+
 - [L4Update worker helper binding](2026-10-08-worker-helper-binding.md) — strict
   held receipt tied to ticket68 helper; entry526/0 per architecture.
 - [L4Update controller worker launch](2026-10-08-controller-worker-launch.md) —

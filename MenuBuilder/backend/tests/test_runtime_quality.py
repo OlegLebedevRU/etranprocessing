@@ -62,8 +62,9 @@ async def test_viewer_can_read_measurements_but_cannot_set_quality(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("raster_step", [None, 1])
 async def test_superuser_keeps_exact_identity_and_provider_can_refuse_other_session(
-    mock_db_session, superuser_token
+    mock_db_session, superuser_token, raster_step
 ):
     app.dependency_overrides[get_db] = lambda: mock_db_session
     stream, lease, writer = str(uuid4()), str(uuid4()), str(uuid4())
@@ -91,6 +92,7 @@ async def test_superuser_keeps_exact_identity_and_provider_can_refuse_other_sess
                     "stream_instance_id": stream,
                     "target_bitrate_kbps": 1000,
                     "writer_key": writer,
+                    **({"raster_step": raster_step} if raster_step is not None else {}),
                 },
             )
     assert response.status_code == 403
@@ -101,6 +103,7 @@ async def test_superuser_keeps_exact_identity_and_provider_can_refuse_other_sess
         "stream_instance_id": stream,
         "target_bitrate_kbps": 1000,
         "writer_key": writer,
+        **({"raster_step": raster_step} if raster_step is not None else {}),
     }
 
 

@@ -7,6 +7,49 @@ const nominal: RuntimeQuality = { available: true, ceiling_kbps: 2000, applied_k
 const stat = (n: number, lost = 0, decoded = n * 10) => ({ timestamp: n * 1000,
   packetsLost: lost, packetsReceived: n * 100, framesDecoded: decoded });
 
+const raster = { ...nominal, raster_available: true, raster_step: 0,
+  initial_width: 3000, initial_height: 2000 };
+
+it("detects a frame still assembling before the first decode without blaming decoder stalls", () => {
+  const policy = new DesktopQualityPolicy();
+  expect(policy.observeTarget(raster, { ...stat(1), framesReceived: 0, framesDecoded: 0 }, 1000)).toBeNull();
+  expect(policy.observeTarget(raster, { ...stat(2), framesReceived: 0, framesDecoded: 0 }, 2000))
+    .toEqual({ kbps: 1000 });
+  const decoder = new DesktopQualityPolicy();
+  for (let n = 1; n < 8; n++) expect(decoder.observeTarget(raster,
+    { ...stat(n), framesReceived: n * 10, framesDecoded: 0 }, n * 1000)).toBeNull();
+  const loss = new DesktopQualityPolicy();
+  for (let n = 1; n < 8; n++) expect(loss.observeTarget(raster,
+    { ...stat(n, n * 10), framesReceived: 0, framesDecoded: 0 }, n * 1000)).toBeNull();
+});
+
+it("reduces raster by half per side only when the bitrate reaches the quarter-pixel budget", () => {
+  expect(new DesktopQualityPolicy().observeTarget({ ...raster, transport_pressure: true }, stat(1), 1000))
+    .toEqual({ kbps: 1000 });
+  expect(new DesktopQualityPolicy().observeTarget({ ...raster, applied_kbps: 1000, transport_pressure: true }, stat(1), 1000))
+    .toEqual({ kbps: 500, rasterStep: 1 });
+  expect(new DesktopQualityPolicy().observeTarget({ ...raster, raster_step: 1, applied_kbps: 250, transport_pressure: true }, stat(1), 1000))
+    .toEqual({ kbps: 125, rasterStep: 2 });
+});
+
+it("does not shrink raster beyond the supported bitrate floor or without native opt-in", () => {
+  expect(new DesktopQualityPolicy().observeTarget({ ...raster, raster_step: 2, applied_kbps: 125, transport_pressure: true }, stat(1), 1000))
+    .toEqual({ kbps: 100 });
+  expect(new DesktopQualityPolicy().observeTarget({ ...raster, raster_available: false, applied_kbps: 1000, transport_pressure: true }, stat(1), 1000))
+    .toEqual({ kbps: 500 });
+});
+
+it("probes one sharper raster at unchanged bitrate after clear measured delivery", () => {
+  const policy = new DesktopQualityPolicy();
+  const reduced = { ...raster, raster_step: 1, applied_kbps: 500, status: "limited" as const };
+  for (let n = 0; n <= 5; n++) expect(policy.observeTarget(reduced, stat(n), n * 1000)).toBeNull();
+  expect(policy.observeTarget(reduced, stat(6), 6000)).toEqual({ kbps: 500, rasterStep: 0 });
+  expect(policy.observeTarget({ ...raster, applied_kbps: 500, transport_pressure: true }, stat(7), 7000))
+    .toEqual({ kbps: 250, rasterStep: 1 });
+  for (let n = 8; n <= 17; n++) expect(policy.observeTarget(reduced, stat(n), n * 1000)).toBeNull();
+  expect(policy.observeTarget(reduced, stat(18), 18000)).toEqual({ kbps: 500, rasterStep: 0 });
+});
+
 it("cuts on measured upstream queue pressure, independent of browser frame drops", () => {
   const policy = new DesktopQualityPolicy();
   expect(policy.observe({ ...nominal, transport_pressure: true }, stat(1), 1000)).toBe(1000);

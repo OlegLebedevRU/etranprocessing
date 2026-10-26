@@ -32,8 +32,9 @@ export function useDesktopQuality(session: DesktopQualitySession | null,
         if (writer) {
           const stats = await readStats();
           if (abort.signal.aborted) return;
-          const target = policy.observe(value, stats, performance.now());
-          if (target !== null) await setRuntimeQuality(device, lease!, stream, target, writerKey!, abort.signal);
+          const target = policy.observeTarget(value, stats, performance.now());
+          if (target !== null) await setRuntimeQuality(device, lease!, stream, target.kbps,
+            writerKey!, abort.signal, target.rasterStep);
         }
       } catch (error) {
         const status = (error as { response?: { status?: number } })?.response?.status;

@@ -1,9 +1,10 @@
 # Desktop runtime quality: one publisher channel
 
-This optional extension leaves existing START/media descriptors and agent
-admission unchanged. Old agents keep ordinary streaming. The implementation
-currently supports the overlapping NV12/HEVC path; AVC and unsupported drivers
-remain usable without runtime adaptation. No migration is required.
+The deployed bitrate extension supports NV12/HEVC. The current candidate adds
+I420/OpenH264 and optional coded-raster changes through the same publisher channel;
+these additions still need combined browser acceptance. Existing START schemas
+and initial descriptors remain unchanged. Old agents keep ordinary streaming
+without mandatory adaptation. No migration is required.
 
 ## Authority and lifecycle
 
@@ -23,7 +24,8 @@ do not gain a quality channel retroactively.
 
 `GET /api/v1/video/devices/{device_id}/stream/quality?stream_instance_id=...`
 returns measurements to authorized viewers. POST to the same path accepts
-`lease_id`, `stream_instance_id`, `writer_key`, `target_bitrate_kbps` only from an
+`lease_id`, `stream_instance_id`, `writer_key`, `target_bitrate_kbps` and optional
+`raster_step` only from an
 operator; app1 performs the authoritative ownership checks. BFF uses the existing
 trusted caller headers and does not replace their session identity.
 
@@ -40,6 +42,34 @@ its existing connection. Reports bind SN/lease/stream/agent boot and increasing
 sample sequence. A future command generation or another boot/epoch is rejected.
 An MQTT ACK means accepted, not applied. Only a native completion report confirms
 the last applied bitrate; driver refusal and missing confirmation remain explicit.
+
+## Optional raster extension (candidate)
+
+MQTT envelopes remain v1. A source opts in with `quality_version:2` and the complete
+report extension: `coded_width`, `coded_height`, `raster_step`, `ceiling_kbps` and
+`last_idr_bytes`. POST may then include `raster_step` with the bitrate in one command.
+Without this report, raster commands are rejected without affecting ordinary video.
+Old bitrate commands omit the new property entirely.
+
+Steps halve both initial coded dimensions, rounding down only to even4:2:0 sizes.
+Thus3000×2000→1500×1000→750×500;1920×1080→960×540→480×270. Every sample covers the
+whole original source; area filtering removes aliasing. Integer2x/4x reductions
+avoid fractional per-pixel weights. Capture/input geometry, source, codec, profile,
+level, lease and stream epoch remain fixed. Initial START/READY descriptors stay
+immutable snapshots; the separate quality report describes the current coded size.
+
+Rebuild disposes borrowed/pending samples on an asynchronous owner, then creates
+the new encoder. It does not assume two concurrent hardware encoders. Failure
+recreates the previous configuration. Main continues STOP/renew and keeps the final
+send gate; the existing bounded cold-activation budget applies until a new IDR.
+Only a complete locally sent new SPS/PPS(+VPS)/IDR confirms the new geometry.
+Already delivered receiver backlog is not erased by this source confirmation.
+
+Software H264 readiness requires a real GDI/OpenH264 sequence and actual SPS
+profile/level, independently of GPU/MF readiness. The helper component is bound;
+GPU metadata is not a software admission requirement. Component hashing is cached
+against file identity, size and write/creation times. Pre-HEVC agents need not
+understand the optional quality extension.
 
 ## Policy and measurements
 
@@ -63,6 +93,17 @@ original profile ceiling (low 2000/default 4000). A driver refusal disables this
 optional adaptation instead of stopping the stream. These policy coefficients
 still require constrained-link acceptance; they are not hardware capabilities.
 
+The candidate uses the source's effective ceiling when lower than the selected
+profile. At a quarter bitrate budget per tier, it can halve both dimensions while
+keeping comparable bits/pixel. The existing100kbit/s floor bounds automatic tiers.
+Recovery probes one sharper tier at unchanged bitrate; failed probes double the
+retry interval. These choices need A/B/A and long-run evidence.
+
+Optional [framesReceived](https://www.w3.org/TR/webrtc-stats/#dom-rtcinboundrtpstreamstats-framesreceived)
+counts complete frames before decoding. Continued RTP without complete frames and
+without new losses exposes assembly delay before first decode. Missing counters,
+idle sources, decoding stalls or element drops alone do not create that signal.
+
 Packet loss uses deltas of `packetsLost`/`packetsReceived`. Decoder or compositor
 drops do not count as network loss. Delivery kbit/s measures completed tunnel
 plaintext, not spare channel capacity; a static desktop's low traffic must not
@@ -73,7 +114,7 @@ The diagnostic statistics overlay is not included in the product.
 ## Native work and latency limits
 
 One worker owns encoder calls, while capture/conversion/control continue on the
-main thread. There are two owned NV12 slots: processing and replaceable latest
+main thread. There are two owned NV12/I420 slots: processing and replaceable latest
 pending. Pending older than one source period is discarded; a needed IDR request
 survives replacement/expiry. There is one borrowed completed AU and no growing
 encoded-frame queue. Main retains RTP, IPC and the final lease/session send gate.
