@@ -457,6 +457,7 @@ class VideoContractOrchestrator:
         org_id: int,
         user: dict[str, Any],
         browser_codecs: dict[str, Any] | None = None,
+        quality_writer_key: str | None = None,
     ) -> dict[str, Any] | None:
         observed_at_ms = int(time.time() * 1000)
         if not (status.get("lease") or {}).get("owner_session_id"):
@@ -715,6 +716,11 @@ class VideoContractOrchestrator:
             command["issued_at_ms"] = now
             command["expires_at_ms"] = min(now + start_budget_ms, deadline * 1000)
             producer_attempted = True
+            writer_options: dict[str, Any] = (
+                {"quality_writer_key": quality_writer_key}
+                if quality_writer_key is not None
+                else {}
+            )
             ready = validate_iot_state(
                 await self.iot.remote_video_v2(
                     sn,
@@ -723,6 +729,7 @@ class VideoContractOrchestrator:
                     lease_id=lease_id,
                     org_id=org_id,
                     user=user,
+                    **writer_options,
                 )
             )
             if ready.get("state") == "failed":

@@ -597,6 +597,7 @@ class IotPlatformClient:
         user: dict[str, Any] | None = None,
         camera_contract: bool | str = False,
         camera_readiness: str | None = None,
+        quality_writer_key: str | None = None,
     ) -> dict[str, Any]:
         """Explicit v2 adapter; no retry against a legacy endpoint on refusal."""
         from urllib.parse import quote
@@ -609,9 +610,13 @@ class IotPlatformClient:
 
         headers.update(camera_headers(camera_contract))
         headers["X-L4-Media-Contract"] = "l4-media/3.0.0"
+        if quality_writer_key is not None and action == "start":
+            headers["X-Video-Quality-Writer"] = quality_writer_key
         if camera_readiness is not None:
             headers["X-L4-Camera-Readiness"] = camera_readiness
         timeout = settings.iot_rpc_stream_start_timeout_seconds
+        if action in ("quality-read", "quality-set"):
+            timeout = 5.0
         if action in ("inventory", "start"):
             timeout = max(timeout, 40.0)
         try:
@@ -628,6 +633,18 @@ class IotPlatformClient:
                         f"{prefix}/devices/{quote(sn, safe='')}/video-capabilities",
                         headers=headers,
                         params=inventory_params or None,
+                    )
+                elif action == "quality-read" and payload:
+                    response = await client.get(
+                        f"{prefix}/devices/{quote(sn, safe='')}/video-quality",
+                        params=payload,
+                        headers=headers,
+                    )
+                elif action == "quality-set" and lease_id:
+                    response = await client.post(
+                        f"{prefix}/lease/{quote(lease_id, safe='')}/video-quality",
+                        json=payload,
+                        headers=headers,
                     )
                 elif action in ("state", "lease") and lease_id:
                     suffix = "video-state" if action == "state" else "video-lease"
