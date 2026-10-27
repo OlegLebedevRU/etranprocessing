@@ -1,5 +1,12 @@
 # Video streaming: control, media, signaling
 
+## Desktop runtime quality candidate — 2026-10-27
+
+Modern desktop producer is l4desk -> native l4capture -> leo4proxy -> media ingress/Janus -> browser. Only the original initiating browser chooses runtime bitrate/raster through the existing writer-key/org/user/lease/epoch/generation-bound API; proxy feedback is measurement only. Optional raster commands/status do not replace old IPC layouts or make legacy H264 agents implement adaptation. Full source geometry remains the immutable input-coordinate snapshot; live coded geometry is reported separately.
+
+Private unsigned candidate on773: bounded latest-frame encoder pipeline, independent async MFT input/output credits, exact reusable area scaling, software H264 rate recovery, and loopback-only send-clock extension stripped by proxy before WAN. Browser policy restores the next raster's pixel-rate budget before probing and, by explicit operator choice, caps failed-probe cooldown at30seconds. This frontend follow-up is not part of the earlier PR134 deployment until separately released. See [runtime contract](../../docs/etran_arch-desktop-runtime-quality.md) and [current handoff/evidence](../tasks/active/2026-10-27-desktop-raster-adaptation-draft.md). Old-binary live E2E remains unavailable by agreement; do not infer it from modern773 runs.
+
+
 ## Desktop compatibility correction — deployed 2026-10-26
 
 Fresh authorized presence without video_contract_v2 uses retained CTL-v1 H264
@@ -19,7 +26,7 @@ STOP/release. Old-binary E2E remains unavailable by agreement.
 Различать запущенный процесс, доставку RTP и свежий декодированный кадр пользователя.
 
 ## Границы ответственности
-MenuBuilder — viewing session/PIN/access, app1 — lease/control, l4desk — FFmpeg,
+MenuBuilder — viewing session/PIN/access, app1 — lease/control, l4desk — FFmpeg/native l4capture,
 leo4proxy — transport, l4media/Janus — ingress/WebRTC. DB ownership см. компонентную задачу.
 
 ## Внешние контракты

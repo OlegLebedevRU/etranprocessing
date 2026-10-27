@@ -10,6 +10,42 @@ const stat = (n: number, lost = 0, decoded = n * 10) => ({ timestamp: n * 1000,
 const raster = { ...nominal, raster_available: true, raster_step: 0,
   initial_width: 3000, initial_height: 2000 };
 
+it("shrinks a measured oversized IDR at the first pressure cut, preserving the old no-pressure path", () => {
+  const large = { ...raster, last_idr_bytes: 467000 };
+  expect(new DesktopQualityPolicy().observeTarget(large, stat(1), 1000)).toBeNull();
+  expect(new DesktopQualityPolicy().observeTarget({ ...large, transport_pressure: true }, stat(1), 1000))
+    .toEqual({ kbps: 1000, rasterStep: 1 });
+  expect(new DesktopQualityPolicy().observeTarget({ ...raster, last_idr_bytes: 25000, transport_pressure: true }, stat(1), 1000))
+    .toEqual({ kbps: 1000 }); // 25 KB at the new 1 Mbps budget fits 200 ms.
+  expect(new DesktopQualityPolicy().observeTarget({ ...large, raster_available: false, transport_pressure: true }, stat(1), 1000))
+    .toEqual({ kbps: 1000 });
+});
+
+it("bounds failed raster probe cooldown at 30 seconds without cutting bitrate during clear delivery", () => {
+  const policy = new DesktopQualityPolicy();
+  let quality = { ...raster, raster_step: 1, applied_kbps: 2000, status: "limited" as const };
+  let probes = 0, deferredAtFullBudget = 0;
+  let lastFailure: number | null = null;
+  for (let n = 0; n < 1000; n++) {
+    const pressure = quality.raster_step === 0;
+    const target = policy.observeTarget({ ...quality, transport_pressure: pressure,
+      last_idr_bytes: pressure ? 467000 : 100000 }, stat(n), n * 1000);
+    if (!pressure && target) expect(target.kbps).toBeGreaterThanOrEqual(quality.applied_kbps);
+    if (!pressure && !target && quality.applied_kbps === 2000 && probes >= 4) deferredAtFullBudget++;
+    if (pressure && target) lastFailure = n * 1000;
+    if (target?.rasterStep === 0) {
+      expect(target.kbps).toBe(2000); probes++;
+      // This fixture also spends 30 seconds restoring 1000 -> 2000 kbps,
+      // then five clear seconds plus the one-second observation boundary.
+      // Repeated failures must not add a growing cooldown on top of that.
+      if (lastFailure !== null) expect(n * 1000 - lastFailure).toBeLessThanOrEqual(37000);
+    }
+    if (target) quality = { ...quality, applied_kbps: target.kbps,
+      raster_step: target.rasterStep ?? quality.raster_step };
+  }
+  expect(probes).toBeGreaterThanOrEqual(20);
+  expect(deferredAtFullBudget).toBeGreaterThan(10);
+});
 it("detects a frame still assembling before the first decode without blaming decoder stalls", () => {
   const policy = new DesktopQualityPolicy();
   expect(policy.observeTarget(raster, { ...stat(1), framesReceived: 0, framesDecoded: 0 }, 1000)).toBeNull();
@@ -23,7 +59,7 @@ it("detects a frame still assembling before the first decode without blaming dec
     { ...stat(n, n * 10), framesReceived: 0, framesDecoded: 0 }, n * 1000)).toBeNull();
 });
 
-it("reduces raster by half per side only when the bitrate reaches the quarter-pixel budget", () => {
+it("uses the quarter-pixel budget when no IDR size is available", () => {
   expect(new DesktopQualityPolicy().observeTarget({ ...raster, transport_pressure: true }, stat(1), 1000))
     .toEqual({ kbps: 1000 });
   expect(new DesktopQualityPolicy().observeTarget({ ...raster, applied_kbps: 1000, transport_pressure: true }, stat(1), 1000))
@@ -39,17 +75,21 @@ it("does not shrink raster beyond the supported bitrate floor or without native 
     .toEqual({ kbps: 500 });
 });
 
-it("probes one sharper raster at unchanged bitrate after clear measured delivery", () => {
+it("restores the next raster's pixel-rate budget before a sharper probe", () => {
   const policy = new DesktopQualityPolicy();
-  const reduced = { ...raster, raster_step: 1, applied_kbps: 500, status: "limited" as const };
-  for (let n = 0; n <= 5; n++) expect(policy.observeTarget(reduced, stat(n), n * 1000)).toBeNull();
-  expect(policy.observeTarget(reduced, stat(6), 6000)).toEqual({ kbps: 500, rasterStep: 0 });
-  expect(policy.observeTarget({ ...raster, applied_kbps: 500, transport_pressure: true }, stat(7), 7000))
-    .toEqual({ kbps: 250, rasterStep: 1 });
-  for (let n = 8; n <= 17; n++) expect(policy.observeTarget(reduced, stat(n), n * 1000)).toBeNull();
-  expect(policy.observeTarget(reduced, stat(18), 18000)).toEqual({ kbps: 500, rasterStep: 0 });
+  const quarter = { ...raster, raster_step: 2, applied_kbps: 125, status: "limited" as const };
+  for (let n = 0; n <= 5; n++) expect(policy.observeTarget(quarter, stat(n), n*1000)).toBeNull();
+  expect(policy.observeTarget(quarter, stat(6), 6000)).toEqual({ kbps: 325 });
+  const rising = { ...quarter, applied_kbps: 325 };
+  for (let n = 7; n <= 11; n++) expect(policy.observeTarget(rising, stat(n), n*1000)).toBeNull();
+  expect(policy.observeTarget(rising, stat(12), 12000)).toEqual({ kbps: 500 });
+  const ready = { ...quarter, applied_kbps: 500 };
+  for (let n = 13; n <= 17; n++) expect(policy.observeTarget(ready, stat(n), n*1000)).toBeNull();
+  expect(policy.observeTarget(ready, stat(18), 18000)).toEqual({ kbps: 500, rasterStep: 1 });
+  const half = { ...ready, raster_step: 1 };
+  for (let n = 19; n <= 23; n++) expect(policy.observeTarget(half, stat(n), n*1000)).toBeNull();
+  expect(policy.observeTarget(half, stat(24), 24000)).toEqual({ kbps: 700 });
 });
-
 it("cuts on measured upstream queue pressure, independent of browser frame drops", () => {
   const policy = new DesktopQualityPolicy();
   expect(policy.observe({ ...nominal, transport_pressure: true }, stat(1), 1000)).toBe(1000);
