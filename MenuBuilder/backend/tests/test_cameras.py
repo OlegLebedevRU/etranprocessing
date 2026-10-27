@@ -124,17 +124,49 @@ async def test_extended_writer_requires_fresh_advertised_method(context):
         "capabilities": {"methods": [160, 161]},
         "revision": "a" * 64,
     }
-    snapshot = {"observed_at": datetime.now(UTC).isoformat(), "cameras": [camera]}
-    upstream.return_value = {
-        "items": [
-            {"device_id": 4619, "type": 84, "gauges": {"300": [{"450": snapshot}]}}
-        ]
+    snapshot = {"observed_at": None, "cameras": [camera]}
+    gauge = {
+        "device_id": 4619,
+        "type": 84,
+        "updated_at": datetime.now(UTC).isoformat(),
+        "gauges": {"300": [{"450": snapshot}]},
     }
+    upstream.return_value = {"items": [gauge]}
     assert await cameras.require_camera_extension(4619, 1, {}, 161) == camera
-    snapshot["observed_at"] = "2000-01-01T00:00:00Z"
+    gauge["updated_at"] = "2000-01-01T00:00:00Z"
     with pytest.raises(HTTPException) as error:
         await cameras.require_camera_extension(4619, 1, {}, 161)
     assert error.value.status_code == 409
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "received", [None, "", "invalid", "2026-01-01T00:00:00", "2999-01-01T00:00:00Z"]
+)
+async def test_writer_does_not_treat_http_read_or_device_time_as_new_receipt(
+    context, received
+):
+    _, upstream, _ = context
+    camera = {
+        "camera_id": "cam:ip000001",
+        "camera_contract_revision": "siplite-camera/1.0.0",
+        "capabilities": {"methods": [161]},
+    }
+    snapshot = {"observed_at": datetime.now(UTC).isoformat(), "cameras": [camera]}
+    upstream.return_value = {
+        "items": [
+            {
+                "device_id": 4619,
+                "type": 84,
+                "updated_at": received,
+                "gauges": {"300": [{"450": snapshot}]},
+            }
+        ]
+    }
+    with pytest.raises(HTTPException) as error:
+        await cameras.require_camera_extension(4619, 1, {}, 161)
+    assert error.value.status_code == 409
+    assert "received_at" not in snapshot
 
 
 @pytest.mark.anyio
@@ -350,21 +382,18 @@ async def test_offline_terminal_never_queues_settings(context):
 
 def test_gauge_snapshot_is_device_scoped():
     snapshot = {"snapshot_id": "fixture", "cameras": []}
-    assert (
-        camera_snapshot(
-            {
-                "items": [
-                    {
-                        "device_id": 4619,
-                        "type": "84",
-                        "gauges": {"300": [{"450": snapshot}]},
-                    }
-                ]
-            },
-            4619,
-        )
-        == snapshot
-    )
+    assert camera_snapshot(
+        {
+            "items": [
+                {
+                    "device_id": 4619,
+                    "type": "84",
+                    "gauges": {"300": [{"450": snapshot}]},
+                }
+            ]
+        },
+        4619,
+    ) == {**snapshot, "received_at": None}
     assert (
         camera_snapshot(
             {

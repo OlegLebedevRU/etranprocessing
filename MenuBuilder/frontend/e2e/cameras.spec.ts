@@ -46,7 +46,7 @@ async function cameraPortal(page: Page, options: { ircut?: boolean; startGate?: 
   let credentialState: "active" | "cleared" | null = null;
   let searchOperation = "";
   let cancelled = false;
-  const snapshot = () => ({ ircut, snapshot_id: "fixture-snapshot", operation_id: operation, observed_at:
+  const snapshot = () => ({ ircut, snapshot_id: "fixture-snapshot", operation_id: operation, received_at: new Date(Date.now() - (options.stale ? 400000 : 0)).toISOString(), observed_at:
     new Date(Date.now() - (options.stale ? 400000 : 0)).toISOString(), cameras: [{
       camera_id: "cam:ip000001", status: "ready", revision: (options.revisionAfterPoll && reads > 1 ? "b" : "a").repeat(64), config,
       ...(options.native ? { camera_contract_revision: "siplite-camera/1.0.0" } : {}),

@@ -37,6 +37,7 @@ export interface CameraState {
 }
 export interface CameraSnapshot {
   snapshot_id: string; operation_id?: string | null; observed_at?: string;
+  received_at?: string | null;
   freshness_max_age_sec?: number; cameras: CameraState[];
   ircut?: IrcutReport;
   media_observations?: { physical_camera_mac?: string }[];
