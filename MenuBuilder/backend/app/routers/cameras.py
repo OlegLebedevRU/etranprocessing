@@ -225,6 +225,101 @@ class CameraCommand(BaseModel):
         return method, item
 
 
+class CameraIrcutCommand(BaseModel):
+    """Configured wiring only: never expose RPC168, arbitrary pairs or apply."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    operation_id: UUID = Field(strict=False)
+    action: Literal["inspect", "start", "status", "cancel", "recover"]
+    camera_mac: str = Field(pattern=r"^([0-9a-f]{2}:){5}[0-9a-f]{2}$")
+    session_id: UUID | None = Field(default=None, strict=False)
+    boot_id: UUID | None = Field(default=None, strict=False)
+    expected_revision: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    allow_disruptive: bool = False
+
+    @model_validator(mode="after")
+    def validate_action(self):
+        if int(self.camera_mac[:2], 16) & 1 or self.camera_mac == "00:00:00:00:00:00":
+            raise ValueError("Invalid camera MAC")
+        if (self.action == "inspect") != (self.session_id is None):
+            raise ValueError("Session required except for inspection")
+        if self.action == "start":
+            if (
+                not self.boot_id
+                or not self.expected_revision
+                or not self.allow_disruptive
+            ):
+                raise ValueError("Fresh inspection and explicit confirmation required")
+        elif self.boot_id or self.expected_revision or self.allow_disruptive:
+            raise ValueError("Start fields are not accepted for this action")
+        return self
+
+    def rpc(self) -> dict[str, Any]:
+        item: dict[str, Any] = {
+            "ircut_revision": "siplite-ircut/1.0.0",
+            "action": self.action,
+            "camera_mac": self.camera_mac,
+            "timeout_ms": 30000,
+        }
+        if self.session_id:
+            item["session_id"] = str(self.session_id)
+        if self.action == "start":
+            item.update(
+                boot_id=str(self.boot_id),
+                expected_revision=self.expected_revision,
+                allow_disruptive=True,
+                budget_ms=300000,
+            )
+        return item
+
+
+@router.post("/{device_id}/ircut")
+async def diagnose_camera_ircut(
+    device_id: int,
+    body: CameraIrcutCommand,
+    user: dict[str, Any] = Depends(require_operator_user),
+    db: AsyncSession = Depends(get_db),
+):
+    terminal = await camera_access(
+        device_id, user, db, write=body.action not in ("inspect", "status")
+    )
+    if body.action == "start":
+        control = await iot_client.remote_input_status(
+            sn=terminal.sn, org_id=terminal.org_id, user=user
+        )
+        if (control.get("lease") or {}).get("active") is not False:
+            raise HTTPException(
+                409,
+                detail={
+                    "code": "camera_busy",
+                    "message": "Сначала остановите просмотр",
+                },
+            )
+        if await camera_main_app_online(terminal.sn, terminal.org_id, user) is not True:
+            raise HTTPException(
+                409,
+                detail={
+                    "code": "camera_terminal_offline",
+                    "message": "Терминал не в сети",
+                },
+            )
+    # IoT checks the independently negotiated revision, MAC/session, current
+    # inspection and writer gate. Do not bypass it with the ordinary camera pin.
+    return await camera_request(
+        "POST",
+        "device-tasks/",
+        terminal.org_id,
+        user,
+        body={
+            "ext_task_id": str(body.operation_id),
+            "device_id": device_id,
+            "method_code": 169,
+            "ttl": 1,
+            "payload": {"dt": [body.rpc()]},
+        },
+    )
+
+
 async def require_camera_extension(
     device_id: int, org_id: int, user: dict[str, Any], method: int
 ) -> dict[str, Any]:
@@ -428,6 +523,7 @@ async def get_camera_command(
         164,
         165,
         166,
+        169,
     ):
         raise HTTPException(404, "Команда камеры не найдена")
     if header.get("method_code") == 166:

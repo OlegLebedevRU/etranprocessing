@@ -20,9 +20,9 @@ export function CameraConnection({ camera, disabled, searching, onSearch, onBind
     <Typography.Text>Камера подключается к port-2. Режим сети: {discovery?.ethernet_mode ?? "неизвестен"}.</Typography.Text>
     <Typography.Text>{searching ? "Поиск камеры выполняется…" : states[discovery?.state ?? ""] ?? "Состояние поиска неизвестно"}</Typography.Text>
     {searching && <Typography.Text type="secondary">{states[discovery?.state ?? ""] ?? "Ожидаем состояние поиска"}</Typography.Text>}
-    <Button disabled={disabled || !canScan} loading={searching} onClick={onSearch}>Найти камеру на port-2</Button>
-    {searching && <Button disabled={!cancelAvailable} loading={cancelling} onClick={onCancel}>Остановить поиск</Button>}
-    {discovery?.state === "auth_required" && <Alert type="warning" showIcon title="Камера найдена, но доступ не подтверждён. Откройте «Логин и пароль» и укажите учётные данные камеры." />}
+    <Button aria-label="Найти камеру на port-2" disabled={disabled || !canScan} loading={searching} onClick={onSearch}>Найти</Button>
+    {searching && <Button aria-label="Остановить поиск" disabled={!cancelAvailable} loading={cancelling} onClick={onCancel}>Отмена</Button>}
+    {discovery?.state === "auth_required" && <Alert type="warning" showIcon title="Камера найдена. Укажите логин и пароль ниже." />}
     <List size="small" dataSource={discovery?.candidates ?? []} locale={{ emptyText: "Подтверждённых кандидатов пока нет" }} renderItem={candidate =>
       <List.Item actions={[<Button key="bind" disabled={disabled || !canBind || !candidate.port_verified}
         onClick={() => onBind(candidate.mac, discovery!.generation)}>Выбрать</Button>]}>

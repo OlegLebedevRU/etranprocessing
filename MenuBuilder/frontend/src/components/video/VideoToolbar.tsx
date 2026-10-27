@@ -1,4 +1,7 @@
-import { Button, Popover, Segmented, Select, Tooltip, Typography } from "antd";
+import { useState } from "react";
+import type { ReactNode } from "react";
+import { Button, Popover, Segmented, Select, Switch, Tooltip, Typography } from "antd";
+import { useCameraTools } from "./CameraToolsContext";
 import {
   FullscreenOutlined,
   ReloadOutlined,
@@ -6,6 +9,8 @@ import {
   PlayCircleOutlined,
   StopOutlined,
   SettingOutlined,
+  VideoCameraOutlined,
+  InfoCircleOutlined,
 } from "@ant-design/icons";
 import type { DeviceListItem } from "../../api/devices";
 import type { CodecPolicy, DeviceInventory } from "../../api/video";
@@ -49,9 +54,15 @@ interface VideoToolbarProps {
   cameraOnly?: boolean;
   settingsBusy?: boolean;
   cameraStartReady?: boolean;
+  cameraMetrics?: ReactNode;
+  cameraShowStats?: boolean;
+  onCameraShowStats?: (show: boolean) => void;
 }
 
 export function VideoToolbar(props: VideoToolbarProps) {
+  const camera = useCameraTools();
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [statusPinned, setStatusPinned] = useState(false);
   const { device, inventory, active, stage, operator, freshFrames } = props;
   const hasSources = !!(
     inventory?.displays.length || inventory?.cameras.length
@@ -144,18 +155,18 @@ export function VideoToolbar(props: VideoToolbarProps) {
   );
   return (
     <div
-      className="video-toolbar"
+      className={`video-toolbar${props.cameraOnly ? " camera-toolbar" : ""}`}
       role="toolbar"
       aria-label="Управление видеотрансляцией"
     >
       <div className="video-toolbar-context">
         <Button
-          aria-label="Сменить терминал"
-          type="primary"
-          icon={<SwapOutlined />}
+          aria-label={props.cameraOnly ? "Выбрать камеру" : "Сменить терминал"}
+          type={props.cameraOnly ? "default" : "primary"}
+          icon={props.cameraOnly ? <VideoCameraOutlined /> : <SwapOutlined />}
           onClick={props.onSelectTerminal}
         >
-        {props.cameraOnly ? "Выбрать камеру" : "Сменить терминал"}
+        {props.cameraOnly ? <span className="camera-picker-label">Камеры</span> : "Сменить терминал"}
         </Button>
         <Tooltip
           title={[props.name, props.address, device.sn]
@@ -193,7 +204,7 @@ export function VideoToolbar(props: VideoToolbarProps) {
         </div>
       )}
       <div className="video-toolbar-actions">
-        {operator && (
+        {(operator || props.cameraOnly) && (
           <Tooltip
             title={
               !active && device.status !== "online"
@@ -219,12 +230,27 @@ export function VideoToolbar(props: VideoToolbarProps) {
                 }
                 onClick={active || stage === "starting" ? props.onStop : props.onStart}
               >
-                {stage === "starting" ? "Отменить запуск" : props.cameraOnly ? active ? "Остановить просмотр" : "Начать просмотр" : active ? "Стоп" : "Запустить"}
+                <span className={props.cameraOnly ? "camera-play-label" : undefined}>{stage === "starting" ? props.cameraOnly ? "Отмена" : "Отменить запуск" : props.cameraOnly ? active ? "Стоп" : "Смотреть" : active ? "Стоп" : "Запустить"}</span>
               </Button>
             </span>
           </Tooltip>
         )}
-        <Tooltip
+        {props.cameraOnly && camera?.tools}
+        {props.cameraOnly ? <Popover destroyOnHidden placement="bottomRight" trigger={["hover", "focus"]} open={statusOpen || statusPinned}
+          onOpenChange={setStatusOpen} content={<div className="camera-status-content">
+            {camera?.summary}
+            {props.cameraMetrics && <div className="camera-status-metrics">{props.cameraMetrics}</div>}
+            <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
+              <Switch size="small" aria-label="Статистика поверх видео" checked={props.cameraShowStats} onChange={props.onCameraShowStats} />Статистика поверх видео
+            </label>
+          </div>}>
+          <button type="button" aria-label="Состояние камеры и потока" title={status} aria-expanded={statusOpen || statusPinned}
+            className={`video-stream-status ${live ? "live" : running || stage === "starting" ? "waiting" : stage === "failed" ? "failed" : ""}`}
+            onClick={() => { setStatusPinned(!statusPinned); setStatusOpen(!statusPinned); }}
+            onKeyDown={e => { if (e.key === "Escape") { setStatusPinned(false); setStatusOpen(false); e.currentTarget.blur(); } }}>
+            <span className="video-status-dot" /><span role="status">{status}</span> <InfoCircleOutlined />
+          </button>
+        </Popover> : <Tooltip
           title={[props.statusText, props.sourceLabel, props.resolution]
             .filter(Boolean)
             .join(" · ")}
@@ -237,11 +263,11 @@ export function VideoToolbar(props: VideoToolbarProps) {
             <span className="video-status-dot" />
             {status}
           </span>
-        </Tooltip>
+        </Tooltip>}
         {operator && !props.cameraOnly && <RemoteControlPanel {...props.control} compact />}
-        <Popover trigger="click" placement="bottomRight" content={settings}>
+        {!props.cameraOnly && <Popover trigger="click" placement="bottomRight" content={settings}>
           <Button aria-label="Настройки видео" icon={<SettingOutlined />} />
-        </Popover>
+        </Popover>}
         <Tooltip title="Во весь экран">
           <Button
             aria-label="Полноэкранный режим видео"

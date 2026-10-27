@@ -1,6 +1,18 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function cameraPortal(page: Page, options: { startGate?: () => Promise<void>; onWatch?: (invalidate: () => void) => void; stateRead?: () => number; playing?: boolean; inventoryUnavailable?: boolean; inventoryGate?: () => Promise<void>; viewer?: boolean; busy?: boolean; offline?: boolean; stale?: boolean; lost?: boolean; unauthorized?: boolean; native?: boolean; nativeAuto?: boolean; revisionAfterPoll?: boolean; rejectStart?: boolean; credentialReady?: boolean; credentialLost?: boolean; credentialUnauthorized?: boolean; searchWaiting?: boolean; enrollmentWaiting?: boolean; runtimeDisabled?: boolean } = {}) {
+async function openQuality(page: Page) {
+  await page.getByRole("button", { name: "Качество камеры", exact: true }).click();
+  await page.getByText("Дополнительно", { exact: true }).click();
+}
+async function openConnection(page: Page) {
+  await page.getByRole("button", { name: "Команды камеры", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Подключение…", exact: true }).click();
+}
+async function powerOff(page: Page) {
+  await page.getByRole("button", { name: "Команды камеры", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Выключить", exact: true }).last().click();
+}
+async function cameraPortal(page: Page, options: { ircut?: boolean; startGate?: () => Promise<void>; onWatch?: (invalidate: () => void) => void; stateRead?: () => number; playing?: boolean; inventoryUnavailable?: boolean; inventoryGate?: () => Promise<void>; viewer?: boolean; busy?: boolean; offline?: boolean; stale?: boolean; lost?: boolean; unauthorized?: boolean; native?: boolean; nativeAuto?: boolean; revisionAfterPoll?: boolean; rejectStart?: boolean; credentialReady?: boolean; credentialLost?: boolean; credentialUnauthorized?: boolean; searchWaiting?: boolean; enrollmentWaiting?: boolean; runtimeDisabled?: boolean } = {}) {
   const posts: { path: string; body: any }[] = [];
   if (options.playing) {
     await page.routeWebSocket("**/watch/ws", socket => options.onWatch?.(() => socket.send(JSON.stringify({ type: "invalidate" }))));
@@ -21,6 +33,11 @@ async function cameraPortal(page: Page, options: { startGate?: () => Promise<voi
       };
     });
   }
+  const ircutTasks = new Map<string, any>();
+  let ircut: any = options.ircut ? { ircut_revision: "siplite-ircut/1.0.0", methods: [169],
+    camera_mac: "02:00:00:00:00:01", boot_id: "11111111-1111-4111-8111-111111111111",
+    revision: "c".repeat(64), configured_pair: [11, 10], session_id: "", state: "idle", reason: "not_started",
+    phase: 0, stage: 0, frame: 0, parked: true, configuration_restored: true, recovery_required: false } : undefined;
   let operation = "";
   let config: any = { video0: { size: "1280x720", fps: 15, bitrate: 1024 }, nightMode: { lightMonitor: false } };
   if (options.nativeAuto) config.video0 = { codec: "h265", size: "", fps: 0, bitrate: 0 };
@@ -29,7 +46,7 @@ async function cameraPortal(page: Page, options: { startGate?: () => Promise<voi
   let credentialState: "active" | "cleared" | null = null;
   let searchOperation = "";
   let cancelled = false;
-  const snapshot = () => ({ snapshot_id: "fixture-snapshot", operation_id: operation, observed_at:
+  const snapshot = () => ({ ircut, snapshot_id: "fixture-snapshot", operation_id: operation, observed_at:
     new Date(Date.now() - (options.stale ? 400000 : 0)).toISOString(), cameras: [{
       camera_id: "cam:ip000001", status: "ready", revision: (options.revisionAfterPoll && reads > 1 ? "b" : "a").repeat(64), config,
       ...(options.native ? { camera_contract_revision: "siplite-camera/1.0.0" } : {}),
@@ -87,6 +104,12 @@ async function cameraPortal(page: Page, options: { startGate?: () => Promise<voi
         active_operation_id: credentialState === "active" ? operation : null, pending_operation_id: null,
         last_operation_id: credentialState === "active" ? operation : null, latest_operation_id: operation || null, latest_state: credentialState };
     }
+    if (path.endsWith("/ircut") && request.method() === "POST") {
+      if (body.action === "start") ircut = { ...ircut, session_id: body.session_id, phase: 3, state: "running", configuration_restored: false };
+      if (body.action === "status" || body.action === "cancel") ircut = { ...ircut, phase: 12, state: "completed",
+        reason: body.action === "cancel" ? "cancelled" : "weak_or_noisy_transition", configuration_restored: true };
+      ircutTasks.set(body.operation_id, { ...ircut }); data = { id: body.operation_id };
+    }
     if (path.endsWith("/commands") && request.method() === "POST") {
       if (options.unauthorized) { await route.fulfill({ status: 401, json: { detail: "Сессия истекла" } }); return; }
       if (options.lost) { await route.abort("failed"); return; }
@@ -101,20 +124,24 @@ async function cameraPortal(page: Page, options: { startGate?: () => Promise<voi
     if (path.includes("/commands/")) data = { id: operation, status: 3, results: [{ status_code: 200,
       result: { status: "ok", operation_id: operation, snapshot_id: "fixture-snapshot", applied_fields: [] } }] };
     if (options.searchWaiting && searchOperation && path.endsWith(`/commands/${searchOperation}`)) data = { id: searchOperation, status: 2, results: [] };
+    if (path.includes("/commands/") && ircutTasks.has(path.split("/").at(-1)!)) {
+      const id = path.split("/").at(-1)!;
+      data = { id, status: 3, results: [{ status_code: 200, result: { ircut: ircutTasks.get(id) } }] };
+    }
     await route.fulfill({ json: data });
   });
   await page.goto("/cameras?device_id=4619");
-  await expect(page.getByText("Состояние и настройки камеры", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Качество камеры", exact: true })).toBeVisible();
   return posts;
 }
 
 test("native field draft survives polling and sends only the changed field", async ({ page }) => {
   const posts = await cameraPortal(page, { native: true });
-  await page.getByText("Видео и изображение", { exact: true }).click();
+  await openQuality(page);
   await page.getByRole("spinbutton", { name: "Частота кадров, FPS" }).fill("20");
   await page.waitForTimeout(5500);
   await expect(page.getByRole("spinbutton", { name: "Частота кадров, FPS" })).toHaveValue("20");
-  await page.getByRole("button", { name: "Применить изменения", exact: true }).click();
+  await page.getByRole("button", { name: "Применить", exact: true }).click();
   await expect(page.getByText("Настройки применены и подтверждены камерой", { exact: true })).toBeVisible();
   expect(posts).toHaveLength(1);
   expect(posts[0].body).toMatchObject({ action: "patch", expected_revision: "a".repeat(64), patch: { video0: { fps: 20 } } });
@@ -123,13 +150,14 @@ test("native field draft survives polling and sends only the changed field", asy
 
 test("native automatic settings display SPS separately and never copy actual size into a patch", async ({ page }) => {
   const posts = await cameraPortal(page, { native: true, nativeAuto: true });
+  await page.getByRole("button", { name: "Состояние камеры и потока" }).hover();
   await expect(page.getByText("H.265 · Native · FPS: Auto · Битрейт: Auto", { exact: true })).toBeVisible();
   await expect(page.getByText("H.265 · 2592×1944 · 20 FPS · Level 5.1 · 8-bit · 420", { exact: true })).toBeVisible();
-  await page.getByText("Видео и изображение", { exact: true }).click();
-  await expect(page.getByRole("textbox", { name: "Размер кадра", exact: true })).toHaveValue("");
+  await openQuality(page);
+  await expect(page.getByRole("combobox", { name: "Разрешение камеры", exact: true })).toBeVisible();
   await expect(page.getByRole("spinbutton", { name: "Частота кадров, FPS", exact: true })).toHaveValue("0");
   await page.getByRole("spinbutton", { name: "Частота кадров, FPS", exact: true }).fill("15");
-  await page.getByRole("button", { name: "Применить изменения", exact: true }).click();
+  await page.getByRole("button", { name: "Применить", exact: true }).click();
   await expect(page.getByText("Настройки применены и подтверждены камерой", { exact: true })).toBeVisible();
   expect(posts).toHaveLength(1);
   expect(posts[0].body.patch).toEqual({ video0: { fps: 15 } });
@@ -137,10 +165,11 @@ test("native automatic settings display SPS separately and never copy actual siz
 
 test("returning to native sends empty size and zero FPS unchanged", async ({ page }) => {
   const posts = await cameraPortal(page, { native: true });
-  await page.getByText("Видео и изображение", { exact: true }).click();
-  await page.getByRole("textbox", { name: "Размер кадра", exact: true }).fill("");
+  await openQuality(page);
+  await page.getByRole("combobox", { name: "Разрешение камеры", exact: true }).click();
+  await page.getByRole("option", { name: "Native / Auto", exact: true }).click();
   await page.getByRole("spinbutton", { name: "Частота кадров, FPS", exact: true }).fill("0");
-  await page.getByRole("button", { name: "Применить изменения", exact: true }).click();
+  await page.getByRole("button", { name: "Применить", exact: true }).click();
   await expect(page.getByText("Настройки применены и подтверждены камерой", { exact: true })).toBeVisible();
   expect(posts).toHaveLength(1);
   expect(posts[0].body.patch).toEqual({ video0: { size: "", fps: 0 } });
@@ -148,17 +177,17 @@ test("returning to native sends empty size and zero FPS unchanged", async ({ pag
 
 test("new camera revision preserves the draft and blocks stale apply", async ({ page }) => {
   const posts = await cameraPortal(page, { native: true, revisionAfterPoll: true });
-  await page.getByText("Видео и изображение", { exact: true }).click();
+  await openQuality(page);
   await page.getByRole("spinbutton", { name: "Частота кадров, FPS" }).fill("20");
   await expect(page.getByText(/Ваши правки сохранены/)).toBeVisible({ timeout: 10000 });
   await expect(page.getByRole("spinbutton", { name: "Частота кадров, FPS" })).toHaveValue("20");
-  await expect(page.getByRole("button", { name: "Применить изменения", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Применить", exact: true })).toBeDisabled();
   expect(posts).toEqual([]);
 });
 
 test("discovery is explicit and an unverified port candidate cannot be bound", async ({ page }) => {
   const posts = await cameraPortal(page, { native: true });
-  await page.getByText("Подключение камеры", { exact: true }).click();
+  await openConnection(page);
   await expect(page.getByText("192.0.2.10", { exact: true })).toBeVisible();
   await expect(page.getByRole("listitem").filter({ hasText: "192.0.2.11" }).getByRole("button", { name: "Выбрать", exact: true })).toBeDisabled();
   expect(posts).toEqual([]);
@@ -170,7 +199,7 @@ test("discovery is explicit and an unverified port candidate cannot be bound", a
 
 test("discovery progress and cancellation use a distinct targeted operation", async ({ page }) => {
   const posts = await cameraPortal(page, { native: true, searchWaiting: true });
-  await page.getByText("Подключение камеры", { exact: true }).click();
+  await openConnection(page);
   await page.getByRole("button", { name: "Найти камеру на port-2", exact: true }).click();
   await expect(page.getByText("Ищем IP камеры…", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Остановить поиск", exact: true }).click();
@@ -184,10 +213,10 @@ test("discovery progress and cancellation use a distinct targeted operation", as
 test("explicit camera HEVC refusal never creates a legacy route or H264 restart", async ({ page }) => {
   await page.addInitScript(() => Object.defineProperty(RTCRtpReceiver, "getCapabilities", { value: () => ({ codecs: [{ mimeType: "video/H264" }, { mimeType: "video/H265" }] }) }));
   const posts = await cameraPortal(page, { native: true, rejectStart: true });
-  await page.getByRole("button", { name: "Настройки видео", exact: true }).click();
+  await page.getByRole("button", { name: "Качество камеры", exact: true }).click();
   await page.getByRole("combobox", { name: "Кодек общего потока", exact: true }).click();
   await page.getByText("H.265", { exact: true }).last().click();
-  await page.getByRole("button", { name: "Настройки видео", exact: true }).click();
+  await page.getByRole("button", { name: "Закрыть", exact: true }).click();
   await page.getByRole("button", { name: "Начать просмотр", exact: true }).click();
   await expect(page.getByText("H.265 недоступен для выбранного источника").first()).toBeVisible();
   const starts = posts.filter(item => item.path.endsWith("/stream/start"));
@@ -198,7 +227,7 @@ test("explicit camera HEVC refusal never creates a legacy route or H264 restart"
 
 test("credential entry uses the private endpoint and clears secrets from UI/storage", async ({ page }) => {
   const posts = await cameraPortal(page, { native: true, credentialReady: true });
-  await page.getByText("Логин и пароль", { exact: true }).click();
+  await openConnection(page);
   await page.getByRole("textbox", { name: "Логин камеры", exact: true }).fill("private-fixture-login");
   await page.getByLabel("Пароль камеры", { exact: true }).fill("private-fixture-password");
   await page.getByRole("button", { name: "Сохранить и применить", exact: true }).click();
@@ -213,7 +242,7 @@ test("credential entry uses the private endpoint and clears secrets from UI/stor
 
 test("lost credential response blocks viewing after reload without repeating POST", async ({ page }) => {
   const posts = await cameraPortal(page, { native: true, credentialReady: true, credentialLost: true });
-  await page.getByText("Логин и пароль", { exact: true }).click();
+  await openConnection(page);
   await page.getByRole("textbox", { name: "Логин камеры", exact: true }).fill("private-fixture-login");
   await page.getByLabel("Пароль камеры", { exact: true }).fill("private-fixture-password");
   await page.getByRole("button", { name: "Сохранить и применить", exact: true }).click();
@@ -226,28 +255,33 @@ test("lost credential response blocks viewing after reload without repeating POS
 
 test("camera list uses explicit tags, includes offline, and never starts on selection", async ({ page }) => {
   const posts = await cameraPortal(page, { offline: true });
+  await page.getByRole("button", { name: "Выбрать камеру", exact: true }).click();
   await expect(page.getByText("Первый этаж").first()).toBeVisible();
+  await expect(page.getByRole("listitem").filter({ hasText: "Вход" })).toContainText("Офлайн");
+  await page.getByRole("button", { name: "Закрыть", exact: true }).click();
   await expect(page.getByText("4623", { exact: true })).toHaveCount(0);
   expect(posts).toEqual([]);
   await expect(page.getByRole("button", { name: "Начать просмотр", exact: true })).toBeDisabled();
 });
 
-test("quality applies with revision and correlated result, without stream commands", async ({ page }) => {
-  const posts = await cameraPortal(page);
-  await expect(page.getByText("Нажмите «Начать просмотр» над плеером.", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Medium", exact: true }).click();
+test("manual raster applies with revision and correlated result, without stream commands", async ({ page }) => {
+  const posts = await cameraPortal(page, { native: true });
+  await openQuality(page);
+  await page.getByRole("combobox", { name: "Разрешение камеры" }).click();
+  await page.getByRole("option", { name: /1920.*1080/ }).click();
+  await page.getByRole("button", { name: "Применить", exact: true }).click();
   await expect(page.getByText("Настройки применены и подтверждены камерой", { exact: true })).toBeVisible();
   expect(posts).toHaveLength(1);
-  expect(posts[0].body).toMatchObject({ action: "quality", value: "medium", expected_revision: "a".repeat(64), allow_disruptive: true });
+  expect(posts[0].body).toMatchObject({ action: "patch", patch: { video0: { size: "1920x1080" } }, expected_revision: "a".repeat(64), allow_disruptive: true });
 });
 
 test("power off needs confirmation, cancelled action emits nothing", async ({ page }) => {
   const posts = await cameraPortal(page);
-  await page.getByRole("button", { name: "Выключить", exact: true }).click();
+  await powerOff(page);
   await page.getByRole("button", { name: "Отмена", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
   expect(posts).toEqual([]);
-  await page.getByRole("button", { name: "Выключить", exact: true }).click();
+  await powerOff(page);
   await page.getByRole("dialog").getByRole("button", { name: "Выключить", exact: true }).click();
   await expect(page.getByText(/Состояние выхода питания подтверждено/)).toBeVisible();
   expect(posts[0].body).toMatchObject({ action: "power", value: "off", expected_power_on: true });
@@ -255,18 +289,22 @@ test("power off needs confirmation, cancelled action emits nothing", async ({ pa
 
 for (const options of [{ busy: true }, { viewer: true }, { stale: true }]) {
   test(`settings stay disabled for ${JSON.stringify(options)}`, async ({ page }) => {
-    const posts = await cameraPortal(page, options);
-    await expect(page.getByRole("button", { name: "Medium", exact: true })).toBeDisabled();
+    const posts = await cameraPortal(page, { ...options, native: true });
+    await openQuality(page);
+    await expect(page.getByRole("spinbutton", { name: "Частота кадров, FPS", exact: true })).toBeDisabled();
     expect(posts).toEqual([]);
   });
 }
 
 test("lost command response is not replayed and remains blocked after reload", async ({ page }) => {
-  const posts = await cameraPortal(page, { lost: true });
-  await page.getByRole("button", { name: "HD", exact: true }).click();
-  await expect(page.getByRole("button", { name: "HD", exact: true })).toBeDisabled();
+  const posts = await cameraPortal(page, { native: true, lost: true });
+  await openQuality(page);
+  await page.getByRole("spinbutton", { name: "Частота кадров, FPS" }).fill("20");
+  await page.getByRole("button", { name: "Применить", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Применить", exact: true })).toBeDisabled();
   await page.reload();
-  await expect(page.getByRole("button", { name: "HD", exact: true })).toBeDisabled();
+  await openQuality(page);
+  await expect(page.getByRole("spinbutton", { name: "Частота кадров, FPS" })).toBeDisabled();
   expect(posts).toHaveLength(1);
 });
 
@@ -296,8 +334,10 @@ test("creation wizard submits Camera OpenIPC as ESP32 plus camera profile", asyn
 });
 
 test("camera command 401 never refreshes or replays POST", async ({ page }) => {
-  const posts = await cameraPortal(page, { unauthorized: true });
-  await page.getByRole("button", { name: "HD", exact: true }).click();
+  const posts = await cameraPortal(page, { native: true, unauthorized: true });
+  await openQuality(page);
+  await page.getByRole("spinbutton", { name: "Частота кадров, FPS" }).fill("20");
+  await page.getByRole("button", { name: "Применить", exact: true }).click();
   await expect(page.getByText("Сессия истекла", { exact: true })).toBeVisible();
   expect(posts).toHaveLength(1);
 });
@@ -307,7 +347,7 @@ test("camera admission can be cancelled before lease and never sends START", asy
   const posts = await cameraPortal(page, { native: true, enrollmentWaiting: true });
   await page.getByRole("button", { name: "Начать просмотр", exact: true }).click();
   await expect.poll(() => posts.filter(p => p.path.endsWith("/admission/enrollment")).length).toBeGreaterThan(0);
-  await page.getByText("Отменить запуск", { exact: true }).click();
+  await page.getByRole("button", { name: "Отменить запуск", exact: true }).click();
   await page.waitForTimeout(800);
   expect(posts.filter(p => /\/(control\/lease|stream\/start|admission\/readiness)$/.test(p.path))).toEqual([]);
   expect(posts.filter(p => p.path.endsWith("/admission/prepare"))).toHaveLength(1);
@@ -324,7 +364,7 @@ test("camera preparation still expires at its original thirty-second deadline", 
   await page.clock.install();
   // Keep the local watch open: disconnected-watch polling otherwise replaces
   // the transient timeout text with its empty-stream fixture after retirement.
-  await page.routeWebSocket("**/watch/ws", socket => options.onWatch?.(() => socket.send(JSON.stringify({ type: "invalidate" }))));
+  await page.routeWebSocket("**/watch/ws", () => {});
   const posts = await cameraPortal(page, { native: true, enrollmentWaiting: true });
   // install() alone continues wall time during locator/HTTP waits. Freeze before
   // START so the interval below is measured from this attempt, not test setup.
@@ -332,7 +372,7 @@ test("camera preparation still expires at its original thirty-second deadline", 
   await page.getByRole("button", { name: "Начать просмотр", exact: true }).click();
   await expect.poll(() => posts.filter(p => p.path.endsWith("/admission/enrollment")).length).toBeGreaterThan(0);
   await page.clock.runFor(29000);
-  await expect(page.getByText("Отменить запуск", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Отменить запуск", exact: true })).toBeVisible();
   await page.clock.runFor(1001);
   await expect(page.getByRole("toolbar").getByRole("status")).toHaveText("Ошибка");
   await expect(page.getByRole("button", { name: "Начать просмотр", exact: true })).toBeEnabled();
@@ -343,13 +383,9 @@ test("camera preparation still expires at its original thirty-second deadline", 
   expect(posts.filter(p => p.path.endsWith("/admission/prepare"))).toHaveLength(1);
 });
 
-for (const [profile, label] of [["low", "Medium"], ["default", "HD"]] as const) {
+for (const [profile, label] of [["low", "Native"]] as const) {
   test(`camera ${label} chooses common quality policy without RPC163 or automatic retry`, async ({ page }) => {
     const posts = await cameraPortal(page, { native: true, nativeAuto: true, rejectStart: true });
-    await page.getByRole("button", { name: "Настройки видео", exact: true }).click();
-    await page.getByRole("combobox", { name: "Выбор качества трансляции" }).click();
-    await page.locator(".ant-select-dropdown:visible").getByText(label, { exact: true }).click();
-    await page.getByRole("button", { name: "Настройки видео", exact: true }).click();
     await page.getByRole("button", { name: "Начать просмотр", exact: true }).click();
     await expect.poll(() => posts.filter(p => p.path.endsWith("/stream/start")).length).toBe(1);
     const prepare = posts.find(p => p.path.endsWith("/admission/prepare"));
@@ -373,13 +409,12 @@ test("native inventory refresh blocks START until the selected source resolves",
   const start = page.getByRole("button", { name: "Начать просмотр", exact: true });
   await expect(start).toBeEnabled();
   pending = true;
-  await page.getByRole("button", { name: "Настройки видео", exact: true }).click();
-  await page.getByRole("button", { name: /Обновить источники и статус/ }).click();
+  await page.getByRole("button", { name: "Команды камеры" }).click();
+  await page.getByRole("menuitem", { name: "Обновить", exact: true }).click();
   await expect.poll(() => !!release).toBe(true);
   await expect(start).toBeDisabled();
   expect(posts.filter(p => /\/(admission\/prepare|control\/lease|stream\/start)$/.test(p.path))).toEqual([]);
   pending = false; release!();
-  await page.getByRole("button", { name: "Настройки видео", exact: true }).click();
   await expect(start).toBeEnabled();
   await start.click();
   await expect.poll(() => posts.filter(p => p.path.endsWith("/stream/start")).length).toBe(1);
@@ -426,17 +461,17 @@ for (const loseFrames of [false, true]) {
     await page.getByRole("button", { name: "Начать просмотр", exact: true }).click();
     await expect(page.getByRole("button", { name: "Остановить просмотр", exact: true })).toBeVisible();
     // START/ACK/Janus success alone is not evidence of decoded frames.
-    await expect(page.getByText("Неизвестно / нет свежих данных управления", { exact: true })).toBeVisible();
+    await expect(page.getByRole("toolbar").getByRole("status")).not.toHaveText("В эфире");
     await expect.poll(() => page.evaluate(() => (window as any).__decodedFrame())).toBeGreaterThan(0);
     await page.clock.runFor(1000);
-    await expect(page.getByText("Поток получен", { exact: true })).toBeVisible();
-    await page.getByText("Видео и изображение", { exact: true }).click();
+    await expect(page.getByRole("toolbar").getByRole("status")).toHaveText("В эфире");
+    await openQuality(page);
     await expect(page.getByRole("spinbutton", { name: "Частота кадров, FPS", exact: true })).toBeDisabled();
     expect(posts.filter(p => p.path.endsWith("/commands"))).toEqual([]);
     if (loseFrames) {
       await page.clock.runFor(5001);
-      await expect(page.getByText("Поток получен", { exact: true })).toHaveCount(0);
-      await expect(page.getByText("Неизвестно / нет свежих данных управления", { exact: true })).toBeVisible();
+      await expect(page.getByRole("toolbar").getByRole("status")).not.toHaveText("В эфире");
+      await expect(page.getByRole("toolbar").getByRole("status")).not.toHaveText("В эфире");
       await expect(page.getByRole("spinbutton", { name: "Частота кадров, FPS", exact: true })).toBeDisabled();
     }
   });
@@ -471,4 +506,70 @@ test("native watch defers only state GET until START settles and preserves later
   const failed = page.waitForResponse(response => response.url().includes("/stream/state?"));
   invalidate!();
   expect((await failed).status()).toBe(422);
+});
+
+
+test("camera toolbar remains one compact row on desktop and mobile without implicit commands", async ({ page }) => {
+  const posts = await cameraPortal(page, { native: true });
+  for (const width of [1280, 768, 390]) {
+    await page.setViewportSize({ width, height: 860 });
+    const toolbar = page.getByRole("toolbar");
+    await expect(toolbar).toBeVisible();
+    const box = await toolbar.boundingBox();
+    expect(box!.height).toBeLessThanOrEqual(46);
+    expect(await toolbar.evaluate(el => el.scrollWidth <= el.clientWidth + 2)).toBe(true);
+  }
+  expect(posts).toEqual([]);
+});
+
+test("status supports hover focus and pinned click without sending camera commands", async ({ page }) => {
+  const posts = await cameraPortal(page, { native: true, nativeAuto: true });
+  const status = page.getByRole("button", { name: "Состояние камеры и потока" });
+  await status.hover();
+  await expect(page.getByText("H.265 · Native · FPS: Auto · Битрейт: Auto", { exact: true })).toBeVisible();
+  await status.click();
+  await page.mouse.move(20, 700);
+  await expect(page.getByText("H.265 · Native · FPS: Auto · Битрейт: Auto", { exact: true })).toBeVisible();
+  await status.press("Escape");
+  await expect(page.getByText("H.265 · Native · FPS: Auto · Битрейт: Auto", { exact: true })).toBeHidden();
+  await status.focus();
+  await expect(page.getByText("H.265 · Native · FPS: Auto · Битрейт: Auto", { exact: true })).toBeVisible();
+  expect(posts).toEqual([]);
+});
+
+test("custom raster is not a preset whitelist and an incomplete size cannot apply", async ({ page }) => {
+  const posts = await cameraPortal(page, { native: true });
+  await openQuality(page);
+  await page.getByRole("combobox", { name: "Разрешение камеры" }).click();
+  await page.getByRole("option", { name: "Свой размер…", exact: true }).click();
+  await page.getByRole("spinbutton", { name: "Ширина кадра", exact: true }).fill("1664");
+  await page.getByRole("spinbutton", { name: "Высота кадра", exact: true }).fill("");
+  await expect(page.getByRole("button", { name: "Применить", exact: true })).toBeDisabled();
+  await page.getByRole("spinbutton", { name: "Высота кадра", exact: true }).fill("936");
+  await page.getByRole("button", { name: "Закрыть", exact: true }).click();
+  await page.getByRole("button", { name: "Качество камеры" }).click();
+  await expect(page.getByRole("spinbutton", { name: "Ширина кадра" })).toHaveValue("1664");
+  await page.getByRole("button", { name: "Применить", exact: true }).click();
+  await expect(page.getByText("Настройки применены и подтверждены камерой", { exact: true })).toBeVisible();
+  expect(posts).toHaveLength(1);
+  expect(posts[0].body.patch).toEqual({ video0: { size: "1664x936" } });
+});
+
+test("IR-cut requires confirmation and exposes configured diagnostic only, not search", async ({ page }) => {
+  const posts = await cameraPortal(page, { native: true, ircut: true });
+  await page.getByRole("button", { name: "Команды камеры" }).click();
+  await expect(page.getByRole("menuitem", { name: /Поиск пинов/ })).toHaveCount(0);
+  await page.getByRole("menuitem", { name: "Проверить IR-cut…", exact: true }).click();
+  await page.getByRole("button", { name: "Проверить", exact: true }).click();
+  const confirmation = page.getByRole("dialog", { name: "Проверить IR-cut?" });
+  await expect(confirmation).toBeVisible();
+  expect(posts.filter(p => p.path.endsWith("/ircut")).map(p => p.body.action)).toEqual(["inspect"]);
+  await confirmation.getByRole("button", { name: "Проверить", exact: true }).click();
+  await expect(page.getByText("Отклик недостаточно уверенный — результат требует проверки", { exact: true })).toBeVisible();
+  await expect(page.getByText("Подтверждено", { exact: true })).toBeVisible();
+  const diagnostic = posts.filter(p => p.path.endsWith("/ircut"));
+  expect(diagnostic.map(p => p.body.action)).toEqual(["inspect", "start", "status"]);
+  expect(diagnostic[1].body).toMatchObject({ allow_disruptive: true, boot_id: "11111111-1111-4111-8111-111111111111", expected_revision: "c".repeat(64) });
+  expect(diagnostic[2].body.session_id).toBe(diagnostic[1].body.session_id);
+  expect(diagnostic.some(p => p.body.pairs || p.body.action === "apply")).toBe(false);
 });

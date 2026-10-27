@@ -38,6 +38,21 @@ export interface CameraState {
 export interface CameraSnapshot {
   snapshot_id: string; operation_id?: string | null; observed_at?: string;
   freshness_max_age_sec?: number; cameras: CameraState[];
+  ircut?: IrcutReport;
+  media_observations?: { physical_camera_mac?: string }[];
+}
+export interface IrcutReport {
+  ircut_revision: string; methods?: number[]; camera_mac: string; boot_id: string; revision: string;
+  session_id: string; state: string; reason: string; phase: number; stage: number; frame: number;
+  configured_pair?: number[] | null; parked: boolean; configuration_restored: boolean; recovery_required: boolean;
+  optical?: { reversible: boolean; delta: number; noise: number; threshold: number };
+}
+export interface IrcutCommand {
+  operation_id: string; action: "inspect" | "start" | "status" | "cancel" | "recover";
+  camera_mac: string; session_id?: string; boot_id?: string; expected_revision?: string; allow_disruptive?: boolean;
+}
+export async function commandCameraIrcut(device: number, body: IrcutCommand): Promise<{ id: string }> {
+  return (await client.post(`/cameras/${device}/ircut`, body, { _retry: true } as AxiosRequestConfig)).data;
 }
 export interface CameraObservation { device_id: number; snapshot: CameraSnapshot | null; lease_active: boolean | null; terminal_online: boolean }
 export interface CameraCommand {
@@ -48,6 +63,7 @@ export interface CameraCommand {
 }
 export interface CameraResult {
   status_code: number; result: { status?: string; error?: string; snapshot_id?: string; operation_id?: string;
+    ircut?: IrcutReport;
     applied_fields?: string[]; field_errors?: { field?: string; reason?: string }[] } | string;
 }
 export interface CameraTask { id: string; status: number; results?: CameraResult[] }

@@ -12,7 +12,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.main import app
 from app.routers import cameras
-from app.services.camera_platform import camera_snapshot
+from app.services.camera_platform import camera_main_app_online, camera_snapshot
 
 
 def test_native_patch_uses_accepted_schema_and_larger_deadline():
@@ -380,3 +380,112 @@ def test_gauge_snapshot_is_device_scoped():
         )
         is None
     )
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"action": "apply"},
+        {"action": "search"},
+        {"pairs": [[10, 11]]},
+        {"method_code": 168},
+        {"camera_mac": "01:00:00:00:00:01"},
+        {"action": "start"},
+        {"boot_id": str(uuid4())},
+    ],
+)
+def test_ircut_ui_cannot_scan_assign_pins_or_start_without_inspection(extra):
+    with pytest.raises(ValidationError):
+        cameras.CameraIrcutCommand.model_validate(
+            {
+                "operation_id": str(uuid4()),
+                "action": "inspect",
+                "camera_mac": "02:00:00:00:00:01",
+                **extra,
+            }
+        )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("active", [True, None])
+async def test_ircut_does_not_interrupt_existing_or_unknown_lease(context, active):
+    _, upstream, control = context
+    control.return_value = {"lease": {"active": active}}
+    command = cameras.CameraIrcutCommand(
+        operation_id=uuid4(),
+        action="start",
+        camera_mac="02:00:00:00:00:01",
+        session_id=uuid4(),
+        boot_id=uuid4(),
+        expected_revision="a" * 64,
+        allow_disruptive=True,
+    )
+    with pytest.raises(HTTPException) as error:
+        await cameras.diagnose_camera_ircut(4619, command, {"org_id": 1}, AsyncMock())
+    assert error.value.status_code == 409
+    assert not any(call.args[0] == "POST" for call in upstream.await_args_list)
+
+
+@pytest.mark.anyio
+async def test_ircut_uses_its_own_revision_and_only_configured_diagnostic(
+    context, monkeypatch
+):
+    _, upstream, _ = context
+    monkeypatch.setattr(cameras, "camera_main_app_online", AsyncMock(return_value=True))
+    session = uuid4()
+    command = cameras.CameraIrcutCommand(
+        operation_id=uuid4(),
+        action="start",
+        camera_mac="02:00:00:00:00:01",
+        session_id=session,
+        boot_id=uuid4(),
+        expected_revision="a" * 64,
+        allow_disruptive=True,
+    )
+    await cameras.diagnose_camera_ircut(4619, command, {"org_id": 1}, AsyncMock())
+    payload = upstream.await_args.kwargs["body"]
+    assert payload["method_code"] == 169
+    assert "camera_contract_revision" not in payload
+    item = payload["payload"]["dt"][0]
+    assert item["session_id"] == str(session)
+    assert item["ircut_revision"] == "siplite-ircut/1.0.0"
+    assert "pairs" not in item and item["budget_ms"] == 300000
+
+
+@pytest.mark.anyio
+async def test_ircut_cleanup_does_not_depend_on_start_lease_check(context):
+    _, upstream, control = context
+    for action in ("status", "cancel", "recover"):
+        await cameras.diagnose_camera_ircut(
+            4619,
+            cameras.CameraIrcutCommand(
+                operation_id=uuid4(),
+                action=action,
+                camera_mac="02:00:00:00:00:01",
+                session_id=uuid4(),
+            ),
+            {"org_id": 1},
+            AsyncMock(),
+        )
+        assert upstream.await_args.kwargs["body"]["method_code"] == 169
+    control.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "revision,online,expected",
+    [
+        ("siplite-camera/1.4.0", True, True),
+        ("siplite-camera/1.4.0", False, False),
+        ("siplite-camera/1.0.0", True, None),
+    ],
+)
+async def test_main_app_presence_checks_the_requested_media_revision(
+    monkeypatch, revision, online, expected
+):
+    inventory = AsyncMock(
+        return_value={"camera_contract_revision": revision, "main_app_online": online}
+    )
+    monkeypatch.setattr(cameras.iot_client, "remote_video_v2", inventory)
+    assert await camera_main_app_online("fixture", 1, {"org_id": 1}) is expected
+    assert inventory.await_args.kwargs["camera_contract"] is True

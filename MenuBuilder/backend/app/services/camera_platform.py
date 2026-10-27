@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 from fastapi import HTTPException
 
+from app.services.camera_contract import CAMERA_MEDIA_REVISION
 from app.services.iot_client import iot_client
 
 
@@ -20,7 +21,7 @@ async def camera_main_app_online(
         )
     except HTTPException:
         return None
-    if value.get("camera_contract_revision") != "siplite-camera/1.0.0":
+    if value.get("camera_contract_revision") != CAMERA_MEDIA_REVISION:
         return None
     return value.get("main_app_online") is True
 
