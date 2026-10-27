@@ -1,10 +1,10 @@
 # Video streaming: control, media, signaling
 
-## Desktop runtime quality candidate — 2026-10-27
+## Desktop runtime quality — frontend deployed, native1.13.55 published — 2026-10-27
 
 Modern desktop producer is l4desk -> native l4capture -> leo4proxy -> media ingress/Janus -> browser. Only the original initiating browser chooses runtime bitrate/raster through the existing writer-key/org/user/lease/epoch/generation-bound API; proxy feedback is measurement only. Optional raster commands/status do not replace old IPC layouts or make legacy H264 agents implement adaptation. Full source geometry remains the immutable input-coordinate snapshot; live coded geometry is reported separately.
 
-Private unsigned candidate on773: bounded latest-frame encoder pipeline, independent async MFT input/output credits, exact reusable area scaling, software H264 rate recovery, and loopback-only send-clock extension stripped by proxy before WAN. Browser policy restores the next raster's pixel-rate budget before probing and, by explicit operator choice, caps failed-probe cooldown at30seconds. This frontend follow-up is not part of the earlier PR134 deployment until separately released. See [runtime contract](../../docs/etran_arch-desktop-runtime-quality.md) and [current handoff/evidence](../tasks/active/2026-10-27-desktop-raster-adaptation-draft.md). Old-binary live E2E remains unavailable by agreement; do not infer it from modern773 runs.
+Private unsigned candidate on773: bounded latest-frame encoder pipeline, independent async MFT input/output credits, exact reusable area scaling, software H264 rate recovery, and loopback-only send-clock extension stripped by proxy before WAN. Browser policy restores the next raster's pixel-rate budget before probing and, by explicit operator choice, caps failed-probe cooldown at30seconds. Frontend PR136 is deployed at464b9ac8b3c58f85e8034e9b37cbefa934515e60, production asset index-Ce50-6sy.js verified. Native PR11 source6b577b0f226fb7ecf7ddf01691b63985d02f1c81 was signed and published as candidate1.13.55; installer was not run on773, which retains the private debug EXEs. Both administrative controllers are stopped. Publication does not imply stable or remote-update admission. See [runtime contract](../../docs/etran_arch-desktop-runtime-quality.md) and [current handoff/evidence](../tasks/active/2026-10-27-desktop-raster-adaptation-draft.md). Old-binary live E2E remains unavailable by agreement; do not infer it from modern773 runs.
 
 
 ## Desktop compatibility correction — deployed 2026-10-26
