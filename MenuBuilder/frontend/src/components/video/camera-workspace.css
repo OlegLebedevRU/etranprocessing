@@ -1,0 +1,47 @@
+.camera-picker { display: flex; flex-direction: column; gap: 10px; }
+.camera-picker-search { display: flex; gap: 6px; }
+.camera-picker-list { display: flex; flex-direction: column; gap: 4px; max-height: calc(100dvh - 190px); overflow: auto; padding: 2px; }
+.camera-picker-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 58px; padding: 8px 10px; border: 1px solid transparent; border-radius: 8px; text-align: left; cursor: pointer; background: transparent; color: inherit; font: inherit; }
+.camera-picker-item:hover { background: var(--ant-color-fill-quaternary, #f7f9fc); }
+.camera-picker-item.selected { border-color: var(--ant-color-primary-border, #91caff); background: var(--ant-color-primary-bg, #e6f4ff); }
+.camera-picker-item:focus-visible { outline: 2px solid var(--ant-color-primary, #1677ff); outline-offset: 1px; }
+.camera-picker-item:disabled { opacity: .55; cursor: not-allowed; }
+.camera-picker-icon { width: 30px; height: 30px; border-radius: 7px; display: grid; place-items: center; background: var(--ant-color-fill-tertiary, #edf1f6); color: var(--ant-color-text-secondary, #596579); flex-shrink: 0; }
+.camera-picker-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; }
+.camera-picker-copy strong { font-size: 13px; font-weight: 600; }
+.camera-picker-copy small { font-size: 11px; color: var(--ant-color-text-secondary, #667085); }
+.camera-picker-copy > * { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.camera-presence { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; font-size: 11px; }
+.camera-presence i { width: 6px; height: 6px; border-radius: 50%; background: #98a2b3; }
+.camera-presence.online i { background: #389e0d; }
+.camera-presence.offline { color: var(--ant-color-text-tertiary, #667085); }
+.camera-picker-check { color: var(--ant-color-primary, #1677ff); font-size: 12px; }
+.camera-toolbar.video-toolbar { gap: 6px; padding: 4px 6px; min-height: 42px; flex-wrap: nowrap; border-radius: 7px; }
+.camera-toolbar .video-toolbar-context { flex: 0 1 auto; gap: 6px; min-width: 0; }
+.camera-toolbar .video-terminal-label { max-width: 170px; font-size: 12px; }
+.camera-toolbar .video-toolbar-actions { gap: 4px; flex-wrap: nowrap; min-width: 0; }
+.camera-toolbar .ant-btn { font-size: 12px; }
+.camera-toolbar .video-stream-status { cursor: pointer; border: 0; font-family: inherit; padding: 6px 8px; max-width: 155px; overflow: hidden; text-overflow: ellipsis; }
+.camera-toolbar .video-stream-status.failed { color: #cf1322; background: #fff1f0; }
+.camera-toolbar .video-stream-status.failed .video-status-dot { background: #cf1322; }
+.camera-tools { display: inline-flex; gap: 4px; align-items: center; }
+.camera-status-content { width: min(340px, calc(100vw - 48px)); max-height: min(560px, 75dvh); overflow-y: auto; font-size: 12px; }
+.camera-status-content .ant-descriptions-item { padding-bottom: 5px !important; }
+.camera-operation-notice { display: flex; align-items: center; gap: 6px; padding: 3px 8px; font-size: 12px; }
+.camera-control-panel { display: flex; flex-direction: column; gap: 12px; }
+.camera-control-panel .ant-alert { padding: 6px 10px; font-size: 12px; }
+.camera-control-panel .ant-descriptions-item { padding-bottom: 5px !important; }
+.camera-status-metrics { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--ant-color-border-secondary, #eee); }
+@media (max-width: 850px) {
+  .camera-toolbar .video-toolbar-context { flex: 0 1 auto; }
+  .camera-toolbar .video-terminal-label { max-width: 90px; }
+  .camera-toolbar .camera-tool-label { display: none; }
+}
+@media (max-width: 520px) {
+  .camera-toolbar .video-terminal-label { display: none; }
+  .camera-toolbar .video-toolbar-context { flex-basis: auto; }
+  .camera-toolbar .video-toolbar-actions { margin-left: auto; gap: 2px; }
+  .camera-toolbar .video-stream-status { max-width: 95px; padding: 6px 4px; font-size: 11px; }
+  .camera-toolbar .camera-picker-label, .camera-toolbar .camera-play-label { display: none; }
+  .camera-toolbar .video-stream-status [role="status"] { display: none; }
+}

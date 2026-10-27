@@ -9,7 +9,8 @@ export default defineConfig({
   fullyParallel: false,
   use: {
     baseURL,
-    channel: process.platform === "win32" ? "msedge" : undefined,
+    channel: process.env.MB_PLAYWRIGHT_CHANNEL || (process.platform === "win32" ? "msedge" : undefined),
+    screenshot: "only-on-failure",
   },
   webServer: {
     command: `npm run preview -- --host 127.0.0.1 --port ${port} --strictPort`,

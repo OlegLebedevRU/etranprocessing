@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Button, Card, Collapse, Descriptions, Modal, Space, Typography } from "antd";
+import type { ReactNode } from "react";
+import { Alert, Button, Collapse, Descriptions, Drawer, Dropdown, Modal, Select, Space, Switch, Tooltip, Typography } from "antd";
+import { DownOutlined, MoreOutlined, SlidersOutlined, SettingOutlined, InfoCircleOutlined, LoadingOutlined } from "@ant-design/icons";
+import type { CodecPolicy } from "../../api/video";
+import { CameraToolsContext } from "./CameraToolsContext";
+import { CameraIrcutDiagnostic } from "./CameraIrcutDiagnostic";
+import "./camera-workspace.css";
 import { commandCamera, getCamera, getCameraCommand, type CameraCommand, type CameraObservation, type CameraProbe, type CameraPatch } from "../../api/cameras";
 import { CameraFields } from "./CameraFields";
 import { CameraConnection } from "./CameraConnection";
 import { CameraCredentials } from "./CameraCredentials";
 import { cameraObservedFormat, cameraVideoSettings, configFresh, observationAge, powerFresh } from "../../utils/cameraState";
+import { cameraErrorMessage } from "../../utils/cameraErrors";
 
 type Pending = { until: number; task?: string; action?: CameraCommand["action"]; operation?: string; cancellation?: string };
 const pause = (signal: AbortSignal) => new Promise<void>((resolve, reject) => {
@@ -14,9 +21,14 @@ const pause = (signal: AbortSignal) => new Promise<void>((resolve, reject) => {
   if (signal.aborted) abort();
 });
 
-export function CameraSettings({ device, org, operator, viewing, freshFrames = false, onBusy }: {
+export function CameraSettings({ device, org, operator, viewing, freshFrames = false, onBusy, enabled = true, children,
+  codecPolicy = "auto", onCodecPolicy, adaptiveQuality, onAdaptiveQuality, adaptationAvailable = false, onRefresh }: {
   device: number; org: number; operator: boolean; viewing: boolean; freshFrames?: boolean; onBusy: (busy: boolean) => void;
+  enabled?: boolean; children?: ReactNode; codecPolicy?: CodecPolicy; onCodecPolicy?: (value: CodecPolicy) => void;
+  adaptiveQuality?: boolean; onAdaptiveQuality?: (value: boolean) => void; adaptationAvailable?: boolean;
+  onRefresh?: () => void;
 }) {
+  const [panel, setPanel] = useState<"quality" | "image" | "connection" | "ircut" | null>(null);
   const key = `camera-command:${org}:${device}`;
   const [pending, setPending] = useState<Pending | null>(() => {
     try { const item = JSON.parse(sessionStorage.getItem(key) || "null");
@@ -25,6 +37,9 @@ export function CameraSettings({ device, org, operator, viewing, freshFrames = f
   const [data, setData] = useState<CameraObservation | null>(null);
   const [notice, setNotice] = useState("");
   const [working, setWorking] = useState(false);
+  const [diagnosticBusy, setDiagnosticBusy] = useState(() => {
+    try { return !!sessionStorage.getItem(`camera-ircut:${org}:${device}`); } catch { return false; }
+  });
   const [credentialBusy, setCredentialBusy] = useState(false);
   const [credentialLockUntil, setCredentialLockUntil] = useState(() => { try { const item = JSON.parse(sessionStorage.getItem(`camera-credentials:${org}:${device}`) || "null");
     return Number.isFinite(item?.until) && item.until <= Date.now() + 90000 ? item.until : 0;
@@ -48,9 +63,10 @@ export function CameraSettings({ device, org, operator, viewing, freshFrames = f
     else { try { sessionStorage.removeItem(key); } catch { /* No command is sent during cleanup. */ } }
     setPending(item);
   }, [key]);
-  const busy = working || credentialBusy || credentialLockUntil > now || !!pending && pending.until > now;
+  const busy = working || diagnosticBusy || credentialBusy || credentialLockUntil > now || !!pending && pending.until > now;
   useEffect(() => { onBusy(busy); return () => onBusy(false); }, [busy, onBusy]);
   useEffect(() => {
+    if (!enabled) return;
     const controller = new AbortController(); lifecycle.current = controller;
     let fetching = false;
     const load = async () => {
@@ -66,7 +82,7 @@ export function CameraSettings({ device, org, operator, viewing, freshFrames = f
     void load();
     const poll = setInterval(() => { setNow(Date.now()); void load(); }, 5000);
     return () => { controller.abort(); clearInterval(poll); confirmation.current?.destroy(); };
-  }, [device]);
+  }, [device, enabled]);
   const snapshot = data?.snapshot ?? null;
   const camera = snapshot?.cameras.find(item => item.camera_id === "cam:ip000001");
   const configValid = configFresh(snapshot, camera, now);
@@ -151,7 +167,7 @@ export function CameraSettings({ device, org, operator, viewing, freshFrames = f
       // Definite admission denial happens before task creation; a lost response stays blocked.
       const status = error?.response?.status;
       if (!accepted || submitting && status && status >= 400 && status < 500) saved(null);
-      setNotice(error?.response?.data?.detail?.message || error?.message || "Результат не подтверждён; автоматического повтора нет");
+      setNotice(cameraErrorMessage(error));
       return false;
     } finally {
       mutation.current = false;
@@ -204,62 +220,96 @@ export function CameraSettings({ device, org, operator, viewing, freshFrames = f
       okText: action === "off" ? "Выключить" : "Перезапустить", cancelText: "Отмена",
       onOk: () => apply("power", action) });
   }
-  return <Card title="Состояние и настройки камеры" size="small">
-    {notice && <Alert title={notice} type="info" showIcon style={{ marginBottom: 12 }} />}
-    {busy && <Alert title="Команда выполняется или ожидает подтверждения. Повтор и запуск просмотра временно заблокированы." type="warning" />}
-    {(viewing || data?.lease_active) && <Alert title="Для изменения настроек остановите просмотр. Чужая сессия не завершается." type="warning" />}
-    <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3 }} items={[
-      { key: "power", label: "Питание", children: powerValid ? camera?.power?.enabled ? "Включено" : "Выключено" : "Неизвестно / устарело" },
-      { key: "camera", label: "Камера", children: freshFrames ? "Поток получен" : configValid && camera?.status === "ready" ? "Доступна" : "Неизвестно / нет свежих данных управления" },
-      { key: "age", label: "Настройки", children: observationAge(snapshot?.observed_at, !!camera?.config && !camera?.stale, now, snapshot?.freshness_max_age_sec ?? 330) },
-      { key: "quality", label: "Режим видео", children: configValid ? cameraVideoSettings(camera) : "Неизвестно" },
-      { key: "actual", label: "Проба потока", children: cameraObservedFormat(snapshot, camera, now) },
-      { key: "mode", label: "День / ночь", children: configValid && camera?.config?.nightMode?.lightMonitor ? "Auto" :
-        configValid && probeAge(camera?.telemetry) === "Актуально" && [0, 1].includes(camera?.telemetry?.metrics?.night_enabled ?? -1) ?
-          camera?.telemetry?.metrics?.night_enabled === 1 ? "Night" : "Day" : "Неизвестно" },
-    ]} />
-    <Space wrap style={{ marginBlock: 12 }}>
-      <Button disabled={!operator || busy} onClick={() => void apply("refresh")}>Обновить состояние</Button>
-      <Typography.Text type="secondary">Питание — состояние управляющего выхода; готовность камеры проверяется отдельно.</Typography.Text>
-    </Space>
-    <Space direction="vertical" style={{ width: "100%" }}>
-      <Collapse items={[{ key: "connection", label: "Подключение камеры", children:
-        <CameraConnection camera={camera} disabled={settingsBlocked} searching={busy && pending?.action === "discover"}
-          onSearch={() => void apply("discover")}
-          cancelAvailable={operator && !!pending?.operation && !pending.cancellation && pending.until > now}
-          cancelling={cancelWorking} onCancel={() => void cancelDiscovery()}
-          onBind={(candidate_mac, discovery_generation) => void apply("bind", undefined, undefined, undefined, { candidate_mac, discovery_generation })} /> }]} />
-      <Collapse items={[{ key: "credentials", label: "Логин и пароль", children:
-        <CameraCredentials key={device} device={device} org={org} camera={camera} operator={operator} disabled={settingsBlocked}
-          onBusy={onCredentialBusy} /> }]} />
-      <Collapse items={[{ key: "native-settings", label: "Видео и изображение", children:
-        <CameraFields key={device} camera={camera} disabled={settingsBlocked || !configValid}
-          onApply={(patch, revision) => apply("patch", undefined, patch, revision)} /> }]} />
-      <Space wrap><Typography.Text>Качество</Typography.Text>{(["medium", "hd"] as const).map(id =>
-        <Button key={id} disabled={settingsBlocked || !configValid || !camera?.capabilities?.quality?.presets?.some(p => p.id === id && p.available)}
-          onClick={() => void apply("quality", id)}>{id === "hd" ? "HD" : "Medium"}</Button>)}</Space>
-      <Space wrap><Typography.Text>День / ночь</Typography.Text>{(["auto", "day", "night"] as const).map(mode =>
-        <Button key={mode} disabled={settingsBlocked || !configValid || !camera?.capabilities?.day_night?.write || !camera.capabilities.day_night.modes?.includes(mode)}
-          onClick={() => void apply("day_night", mode)}>{mode === "auto" ? "Auto" : mode === "day" ? "Day" : "Night"}</Button>)}</Space>
-      <Space wrap><Typography.Text>Питание</Typography.Text>{(["on", "off", "restart"] as const).map(action =>
-        <Button key={action} danger={action !== "on"} disabled={settingsBlocked || !powerValid || !camera?.capabilities?.power?.available ||
-          !camera.capabilities.power.actions?.includes(action) || (action === "restart" && camera.power?.enabled !== true)}
-          onClick={() => power(action)}>{action === "on" ? "Включить" : action === "off" ? "Выключить" : "Перезапустить"}</Button>)}</Space>
-    </Space>
-    <Collapse style={{ marginTop: 12 }} items={[{ key: "illumination", label: "Подсветка и плата", children:
-      <Space orientation="vertical">
-        <Typography.Text>White LED · IR LED · общий enable · PWM</Typography.Text>
-        <Alert type="info" showIcon title="Подключение и полярность подсветки не подтверждены. Физические пробы и управление GPIO недоступны в этой версии." />
-        <Typography.Text type="secondary">Предполагаемые роли платы не являются проверенными выходами. Управление днём / ночью доступно отдельно по возможностям камеры.</Typography.Text>
-      </Space> }]} />
-    <Collapse style={{ marginTop: 12 }} items={[{ key: "details", label: "Подробности", children:
-      <Descriptions size="small" column={1} items={[
-        { key: "identity", label: "Версии", children: probeAge(camera?.identity) === "Актуально" ? `${camera?.identity?.openipc_version} / ${camera?.identity?.majestic_version}` : probeAge(camera?.identity) },
-        { key: "health", label: "Диагностика", children: probeAge(camera?.telemetry?.health) },
-        { key: "temperature", label: "Температура", children: probeAge(camera?.telemetry?.health) === "Актуально" ? `${camera?.telemetry?.health?.metrics?.node_hwmon_temp_celsius ?? "Неизвестно"} °C` : "Неизвестно" },
-        { key: "uptime", label: "Uptime камеры", children: probeAge(camera?.telemetry?.health) === "Актуально" ? `${camera?.telemetry?.health?.uptime_sec ?? "Неизвестно"} с` : "Неизвестно" },
-        { key: "memory", label: "Доступная память", children: probeAge(camera?.telemetry?.health) === "Актуально" ? `${camera?.telemetry?.health?.metrics?.node_memory_MemAvailable_bytes ?? "Неизвестно"} байт` : "Неизвестно" },
-        { key: "clock", label: "Часы камеры", children: probeAge(camera?.telemetry?.health) === "Актуально" && camera?.telemetry?.health?.clock?.status === "skewed" ? "Время камеры расходится со временем терминала" : "См. диагностику" },
-      ]} /> }]} />
-  </Card>;
+  if (!enabled) return <>{children}</>;
+  const blockedReason = !operator ? "Только для оператора" : busy ? "Ожидается результат команды" :
+    data?.terminal_online !== true ? "Нет связи с терминалом" : viewing ? "Сначала остановите просмотр" :
+      data?.lease_active !== false ? "Камера занята другой сессией или состояние сессии неизвестно" :
+        !configValid ? "Обновите состояние камеры" : null;
+  const commandBlockedReason = !operator ? "Только для оператора" : busy ? "Ожидается результат команды" :
+    data?.terminal_online !== true ? "Нет связи с терминалом" : viewing ? "Сначала остановите просмотр" :
+      data?.lease_active !== false ? "Камера занята другой сессией или состояние сессии неизвестно" : null;
+  const night = camera?.telemetry?.metrics?.night_enabled;
+  const dayNightAvailable = !!camera?.capabilities?.day_night?.write;
+  const powerAvailable = !!camera?.capabilities?.power?.available;
+  const needsAccess = camera?.status === "auth_required" || camera?.discovery?.state === "auth_required";
+  const missingCamera = camera?.discovery?.state === "not_found" && camera?.status !== "ready";
+  const controlReason = (available: boolean, needsConfig = false) => commandBlockedReason ||
+    (!available ? "Камера не подтвердила поддержку" : needsConfig && !configValid ? "Обновите состояние камеры" : null);
+  const summary = <Descriptions size="small" column={1} items={[
+    { key: "connection", label: "Доступ", children: !data?.terminal_online ? "Терминал офлайн" : needsAccess ? "Нужен пароль" : camera?.status === "ready" ? "Камера доступна" : "Пока не подтверждён" },
+    { key: "requested", label: "Настройка", children: configValid ? cameraVideoSettings(camera) : "Нет свежих данных" },
+    { key: "actual", label: "Поток камеры", children: cameraObservedFormat(snapshot, camera, now) },
+    { key: "browser", label: "Просмотр", children: freshFrames ? "Кадры поступают" : "Нет подтверждённых кадров в браузере" },
+    { key: "power", label: "Выход питания", children: powerValid ? camera?.power?.enabled ? "Включён" : "Выключен" : "Не подтверждён" },
+    { key: "night", label: "Ночной режим", children: probeAge(camera?.telemetry) === "Актуально" && (night === 0 || night === 1) ? night === 1 ? "Включён" : "Выключен" : "Не подтверждён" },
+    { key: "age", label: "Состояние", children: observationAge(snapshot?.observed_at, !!snapshot, now, snapshot?.freshness_max_age_sec ?? 330) },
+    { key: "details", label: "Подробности", children: <Collapse ghost size="small" items={[{ key: "details", label: "Устройство и возможности", children: <Space orientation="vertical" size={3}>
+      <Typography.Text>OpenIPC {camera?.identity?.openipc_version || "—"} · Majestic {camera?.identity?.majestic_version || "—"}</Typography.Text>
+      <Typography.Text>Port-2 · {camera?.discovery?.ethernet_mode || "Режим неизвестен"}</Typography.Text>
+      <Typography.Text type="secondary">Подсветка/PWM: аппаратная поддержка не подтверждена.</Typography.Text>
+    </Space> }]} /> },
+  ]} />;
+  const menuItems = [
+    { key: "night", type: "group" as const, label: "Ночной режим", children: [
+      ...(["auto", "night", "day"] as const).map(mode => {
+        const reason = controlReason(dayNightAvailable && !!camera?.capabilities?.day_night?.modes?.includes(mode), true);
+        return { key: `night:${mode}`, disabled: !!reason, label: <Tooltip title={reason}>{mode === "auto" ? "Авто" : mode === "night" ? "Включить" : "Выключить"}</Tooltip> };
+      }),
+      { key: "ircut", label: <Tooltip title={diagnosticBusy ? null : commandBlockedReason}>Проверить IR-cut…</Tooltip>, disabled: !!commandBlockedReason && !diagnosticBusy },
+    ] },
+    { key: "power", type: "group" as const, label: "Питание камеры", children: (["on", "off", "restart"] as const).map(action => {
+      const reason = controlReason(powerAvailable && !!camera?.capabilities?.power?.actions?.includes(action)) ||
+        (!powerValid ? "Состояние питания не подтверждено" : action === "restart" && !camera?.power?.enabled ? "Питание выключено" : null);
+      return { key: `power:${action}`, danger: action !== "on", disabled: !!reason,
+        label: <Tooltip title={reason}>{action === "on" ? "Включить" : action === "off" ? "Выключить" : "Перезапустить"}</Tooltip> };
+    }) },
+    { type: "divider" as const }, { key: "connection", label: "Подключение…" },
+    { key: "refresh", label: "Обновить", disabled: !operator || busy },
+  ];
+  const tools = <span className="camera-tools">
+    <Button icon={<SettingOutlined />} onClick={() => setPanel("quality")} aria-label="Качество камеры"><span className="camera-tool-label">Качество</span><DownOutlined /></Button>
+    <Button icon={<SlidersOutlined />} onClick={() => setPanel("image")} aria-label="Изображение камеры"><span className="camera-tool-label">Изображение</span></Button>
+    <Dropdown menu={{ items: menuItems, onClick: ({ key }) => {
+      if (key === "connection" || key === "ircut") setPanel(key);
+      else if (key === "refresh") { void apply("refresh"); onRefresh?.(); }
+      else if (key.startsWith("night:")) void apply("day_night", key.slice(6));
+      else if (key.startsWith("power:")) power(key.slice(6));
+    } }} trigger={["click"]}><Button aria-label="Команды камеры" icon={<MoreOutlined />} /></Dropdown>
+  </span>;
+  return <CameraToolsContext.Provider value={{ tools, summary }}>
+    {children || tools}
+    {(notice || busy || needsAccess || missingCamera) && <div className="camera-operation-notice" role="status">
+      {busy ? <LoadingOutlined /> : <InfoCircleOutlined />}
+      <span>{notice || (diagnosticBusy ? "Проверка IR-cut: ожидается результат" : busy ? "Ожидается подтверждение команды" : needsAccess ? "Камере нужен пароль" : "Камера не найдена")}</span>
+      {(needsAccess || missingCamera) && <Button size="small" type="link" onClick={() => setPanel("connection")}>{needsAccess ? "Доступ" : "Подключить"}</Button>}
+      {!busy && <Button size="small" type="text" aria-label="Закрыть сообщение камеры" onClick={() => setNotice("")}>×</Button>}
+    </div>}
+    <Drawer open={panel !== null} onClose={() => setPanel(null)} size={400} styles={{ body: { padding: 16 } }}
+      title={panel === "quality" ? "Качество" : panel === "image" ? "Изображение" : panel === "ircut" ? "Проверка IR-cut" : "Подключение"}>
+      <div className="camera-control-panel">
+        {panel !== "connection" && panel !== "ircut" && blockedReason && <Alert title={blockedReason} type="info" showIcon action={operator && !busy && !viewing ? <Button size="small" onClick={() => void apply("refresh")}>Обновить</Button> : undefined} />}
+        <div hidden={panel !== "quality"}>
+          <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+            <CameraFields key={`video:${device}`} group="video" camera={camera} disabled={settingsBlocked || !configValid} onApply={(patch, revision) => apply("patch", undefined, patch, revision)} />
+            <label>Кодек подключения <Select<CodecPolicy> aria-label="Кодек общего потока" value={codecPolicy} onChange={onCodecPolicy} disabled={!operator || viewing || busy}
+              style={{ width: "100%" }} options={[{ value: "auto", label: "Auto · H.265 первым" }, { value: "h265", label: "H.265" }, { value: "h264", label: "H.264" }]} /></label>
+            <Tooltip title={!adaptationAvailable ? "Доступно инициатору активной трансляции" : "Меняет битрейт, сохраняя выбранный размер"}>
+              <Space><Switch size="small" aria-label="Автоадаптация по приёму" checked={adaptiveQuality} disabled={!adaptationAvailable} onChange={onAdaptiveQuality} /><span>Автобитрейт</span></Space>
+            </Tooltip>
+            <Typography.Text type="secondary">Фактически: {cameraObservedFormat(snapshot, camera, now)}</Typography.Text>
+          </Space>
+        </div>
+        <div hidden={panel !== "image"}><CameraFields key={`image:${device}`} group="image" camera={camera} disabled={settingsBlocked || !configValid} onApply={(patch, revision) => apply("patch", undefined, patch, revision)} /></div>
+        {panel === "connection" && <>
+          {commandBlockedReason && <Alert title={commandBlockedReason} type="info" showIcon />}
+          <CameraConnection camera={camera} disabled={settingsBlocked} searching={busy && pending?.action === "discover"}
+            onSearch={() => void apply("discover")} cancelAvailable={operator && !!pending?.operation && !pending.cancellation && pending.until > now}
+            cancelling={cancelWorking} onCancel={() => void cancelDiscovery()}
+            onBind={(candidate_mac, discovery_generation) => void apply("bind", undefined, undefined, undefined, { candidate_mac, discovery_generation })} />
+          <CameraCredentials key={device} device={device} org={org} camera={camera} operator={operator} disabled={settingsBlocked} onBusy={onCredentialBusy} />
+        </>}
+        <div hidden={panel !== "ircut"}><CameraIrcutDiagnostic device={device} org={org} snapshot={snapshot} disabled={!!commandBlockedReason} onBusy={setDiagnosticBusy} /></div>
+      </div>
+    </Drawer>
+  </CameraToolsContext.Provider>;
 }

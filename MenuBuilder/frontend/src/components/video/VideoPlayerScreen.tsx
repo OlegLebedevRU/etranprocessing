@@ -83,7 +83,7 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
   const isFailed = streamStage === "failed" || Boolean(errorMessage);
   const isNativeSize = isLive && !isControlActive && displayMode === "native" && videoSize.width > 0;
   const sourceAspect = videoSize.width > 0 && videoSize.height > 0 ? videoSize.width / videoSize.height : 16 / 9;
-  const reservedHeight = window.innerWidth < 700 ? 210 : 140;
+  const reservedHeight = cameraOnly ? 112 : window.innerWidth < 700 ? 210 : 140;
 
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(document.fullscreenElement === playerContainerRef.current);
@@ -427,7 +427,7 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
           </div>
           <div style={{ color: "rgba(255, 255, 255, 0.6)", fontSize: 13, maxWidth: 440 }}>
             {cameraOnly
-              ? isViewer ? "Нажмите «Начать просмотр», чтобы подключиться к потоку, запущенному оператором." : "Нажмите «Начать просмотр» над плеером."
+              ? isViewer ? "Нажмите «Смотреть», чтобы подключиться к потоку оператора." : "Нажмите «Смотреть» над плеером."
               : isViewer
               ? "Ожидание запуска видеотрансляции оператором терминала."
               : "Выберите источник видео над плеером и нажмите «Запустить трансляцию»."}

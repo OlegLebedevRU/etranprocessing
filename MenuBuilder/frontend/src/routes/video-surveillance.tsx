@@ -7,7 +7,6 @@ import {
   Card,
   Drawer,
   Grid,
-  Switch,
   message,
   Typography,
 } from "antd";
@@ -45,6 +44,7 @@ import { StreamQualityOverlay } from "../components/video/StreamQualityOverlay";
 import { hasPermission, PERMISSION_VIDEO_VIEW } from "../utils/permissions";
 
 // Новые переработанные UX/UI компоненты
+import { CameraPicker } from "../components/video/CameraPicker";
 import { TerminalList } from "../components/video/TerminalList";
 import { VideoToolbar } from "../components/video/VideoToolbar";
 import { selectableDevices } from "../utils/terminalPresentation";
@@ -188,6 +188,14 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
   const [loadingDevices, setLoadingDevices] = useState<boolean>(true);
   const [selectedDevice, setSelectedDevice] = useState<DeviceListItem | null>(null);
   const [cameraSettingsBusy, setCameraSettingsBusy] = useState(false);
+  const [showCameraStats, setShowCameraStats] = useState(false);
+
+  useEffect(() => {
+    if (cameraOnly && selectedDevice) {
+      try { sessionStorage.setItem(`camera-selection:${orgId}`, String(selectedDevice.device_id)); } catch { /* Selection need not be persisted. */ }
+      setIsDeviceDrawerOpen(false);
+    }
+  }, [cameraOnly, orgId, selectedDevice?.device_id]);
 
   // Мобильный / планшетный Drawer выбора терминала
   const [isDeviceDrawerOpen, setIsDeviceDrawerOpen] = useState(!searchParams.has("device_id") && !searchParams.has("sn"));
@@ -289,6 +297,11 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
         if (target !== undefined) return target;
         if (prev && allItems.some((d) => d.device_id === prev.device_id)) {
           return allItems.find(d => d.device_id === prev.device_id) || null;
+        }
+        if (cameraOnly) {
+          let previous = "";
+          try { previous = sessionStorage.getItem(`camera-selection:${orgId}`) || ""; } catch { /* Optional selection hint. */ }
+          return allItems.find(d => String(d.device_id) === previous) || (allItems.length === 1 ? allItems[0] : null);
         }
         return null;
       });
@@ -1119,21 +1132,19 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
         }}
       >
         {/* Левая панель списка терминалов (видна на Desktop) */}
-        {cameraOnly && !isMobile && <Card title="Камеры" size="small" style={{ width: 300, flexShrink: 0 }}>
-          <TerminalList initialFilter="all" devices={devices} terminalAddresses={terminalAddresses}
-            terminalNames={terminalNames} selectedDevice={selectedDevice}
-            onSelectDevice={device => void handleSelectDevice(device)} loading={loadingDevices} onRefresh={loadDevices} />
-        </Card>}
         <Drawer
           title={cameraOnly ? "Выбор камеры" : "Выбор терминала"}
           placement="left"
-          open={isDeviceDrawerOpen && (!cameraOnly || isMobile)}
+          open={isDeviceDrawerOpen}
           onClose={() => setIsDeviceDrawerOpen(false)}
           width={screens.xs ? "85%" : 360}
           styles={{ body: { padding: 12 } }}
         >
-          <TerminalList
-            initialFilter={cameraOnly ? "all" : "online"}
+          {(cameraOnly ? <CameraPicker
+            devices={devices} terminalAddresses={terminalAddresses} terminalNames={terminalNames}
+            selectedDevice={selectedDevice} loading={loadingDevices} onRefresh={loadDevices}
+            onSelectDevice={dev => { void handleSelectDevice(dev); setIsDeviceDrawerOpen(false); }} /> : <TerminalList
+            initialFilter="online"
             devices={devices}
             terminalAddresses={terminalAddresses}
             terminalNames={terminalNames}
@@ -1145,7 +1156,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
             loading={loadingDevices}
             onRefresh={loadDevices}
             maxHeight="calc(100vh - 180px)"
-          />
+          />)}
         </Drawer>
 
         {/* Правая / Основная рабочая зона */}
@@ -1184,7 +1195,18 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
               )}
 
               {/* Источник и профиль доступны до запуска в одной компактной строке. */}
+              <CameraSettings key={`${cameraOnly}:${selectedDevice.device_id}`} enabled={cameraOnly} device={selectedDevice.device_id}
+                org={orgId} operator={isOperator} freshFrames={freshFrames}
+                viewing={isSessionActive || streamStage === "starting" || streamStage === "stopping"}
+                codecPolicy={codecPolicy} onCodecPolicy={setCodecPolicy} adaptiveQuality={adaptiveQuality}
+                onAdaptiveQuality={setAdaptiveQuality} adaptationAvailable={!!(isSessionActive && coordinatedSession?.qualityWriterKey && coordinatedSession.publisherOwned !== false)}
+                onRefresh={() => void fetchDeviceInfo(selectedDevice.device_id, true)}
+                onBusy={setCameraSettingsBusy}>
               <VideoToolbar
+                cameraShowStats={showCameraStats} onCameraShowStats={setShowCameraStats}
+                cameraMetrics={cameraOnly && activeStream?.stream_instance_id ? <StreamQualityOverlay inline
+                  stream={activeStream.stream_instance_id} codec={activeStream.descriptor?.tracks[0]?.codec}
+                  videoRef={videoRef} readStats={readQualityStats} quality={runtimeQuality} /> : undefined}
                 cameraOnly={cameraOnly} settingsBusy={cameraSettingsBusy} cameraStartReady={nativeStartReady}
                 device={selectedDevice} name={terminalNames[selectedDevice.device_id]} address={terminalAddresses[selectedDevice.device_id]}
                 inventory={inventory} source={selectedSourceKey} profile={selectedProfile}
@@ -1195,7 +1217,8 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
                 onSelectTerminal={() => setIsDeviceDrawerOpen(true)}
                 stage={streamStage} active={isSessionActive} freshFrames={freshFrames} statusText={statusText}
                 sourceLabel={activeSourceLabel || undefined} resolution={videoResolution}
-                operator={isOperator} onStart={handleOperatorStart} onStop={handleOperatorStop}
+                operator={isOperator} onStart={isOperator ? handleOperatorStart : () => void handleViewerConnect(selectedDevice.device_id)}
+                onStop={isOperator ? handleOperatorStop : () => void stopSession("viewer_stop")}
                 displayMode={displayMode} onDisplayMode={setDisplayMode}
                 onFullscreen={() => { void playerContainerRef.current?.requestFullscreen().catch(() => message.warning("Полноэкранный режим недоступен")); }}
                 control={{
@@ -1205,20 +1228,15 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
                   onSendShortcut: rc.sendShortcut, onSendKey: rc.sendKey, lastCommandResult: rc.lastClickResult, isMobile,
                 }}
               />
+              </CameraSettings>
               {runtimeQuality?.available && runtimeQuality.applied_kbps !== undefined
                 && runtimeQuality.ceiling_kbps !== undefined
                 && runtimeQuality.applied_kbps < runtimeQuality.ceiling_kbps
-                && (runtimeQuality.report_age_ms ?? Infinity) < 3000 && <Alert
-                  type="warning" showIcon
-                  message="Качество временно снижено для уменьшения задержки"
-                />}
-              {cameraOnly && isSessionActive && coordinatedSession?.qualityWriterKey
-                && coordinatedSession.publisherOwned !== false && <div style={{ display: "flex", gap: 7, alignItems: "center", marginBottom: 8 }}>
-                  <Switch size="small" checked={adaptiveQuality} onChange={setAdaptiveQuality} aria-label="Автоадаптация по приёму" />
-                  <Text type="secondary">Автоадаптация по приёму</Text>
-                </div>}
+                && (runtimeQuality.report_age_ms ?? Infinity) < 3000 && (cameraOnly
+                  ? <div className="camera-operation-notice" role="status">Битрейт временно снижен для уменьшения задержки</div>
+                  : <Alert type="warning" showIcon message="Качество временно снижено для уменьшения задержки" />)}
               <VideoPlayerScreen
-                qualityOverlay={activeStream?.stream_instance_id ? <StreamQualityOverlay
+                qualityOverlay={(!cameraOnly || showCameraStats) && activeStream?.stream_instance_id ? <StreamQualityOverlay
                   stream={activeStream.stream_instance_id} profile={activeStream.descriptor?.profile_id}
                   codec={activeStream.descriptor?.tracks[0]?.codec} videoRef={videoRef} readStats={readQualityStats} quality={runtimeQuality} /> : null}
                 fullSourceFrame={activeStream?.descriptor?.contract_version === 3
@@ -1248,19 +1266,16 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
                   busyOwner: rc.busyOwner,
                 }}
               />
-              {isViewer && <Button disabled={cameraSettingsBusy || streamStage === "starting" || streamStage === "stopping"}
+              {isViewer && !cameraOnly && <Button disabled={cameraSettingsBusy || streamStage === "starting" || streamStage === "stopping"}
                 onClick={() => void (isSessionActive ? stopSession("viewer_stop") : handleViewerConnect(selectedDevice.device_id))}>
                 {isSessionActive ? "Остановить просмотр" : "Начать просмотр"}</Button>}
-              {cameraOnly && <CameraSettings key={selectedDevice.device_id} device={selectedDevice.device_id}
-                org={orgId} operator={isOperator} freshFrames={freshFrames} viewing={isSessionActive || streamStage === "starting" || streamStage === "stopping"}
-                onBusy={setCameraSettingsBusy} />}
             </>
           ) : (
             <Card style={{ textAlign: "center", padding: "64px 24px" }}>
               <Text type="secondary" style={{ fontSize: 15 }}>
                 {cameraOnly ? "Выберите камеру в списке" : "Выберите терминал в списке для начала видеонаблюдения"}
               </Text>
-              <div style={{ marginTop: 16 }}><Button type="primary" icon={<UnorderedListOutlined />} onClick={() => setIsDeviceDrawerOpen(true)}>Выбрать терминал</Button></div>
+              <div style={{ marginTop: 16 }}><Button type="primary" icon={<UnorderedListOutlined />} onClick={() => setIsDeviceDrawerOpen(true)}>{cameraOnly ? "Камеры" : "Выбрать терминал"}</Button></div>
             </Card>
           )}
         </div>

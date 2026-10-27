@@ -10,10 +10,11 @@ interface Props {
   videoRef: RefObject<HTMLVideoElement | null>;
   readStats: () => Promise<VideoReceiveStats | null>;
   quality?: RuntimeQuality | null;
+  inline?: boolean;
 }
 
 /** Receiver observations only; no quality command, lease timer or HTTP polling. */
-export function StreamQualityOverlay({ stream, profile, codec, videoRef, readStats, quality }: Props) {
+export function StreamQualityOverlay({ stream, profile, codec, videoRef, readStats, quality, inline = false }: Props) {
   const [text, setText] = useState("Измерение потока…");
   useEffect(() => {
     let cancelled = false;
@@ -56,6 +57,6 @@ export function StreamQualityOverlay({ stream, profile, codec, videoRef, readSta
     return () => { cancelled = true; clearTimeout(timer); };
   }, [stream, profile, codec, videoRef, readStats]);
   return <div data-testid="stream-quality-overlay" title="Измерения браузера за последний интервал; приём RTP не равен целевому битрейту камеры"
-    style={{ position: "absolute", top: 10, left: 10, zIndex: 5, pointerEvents: "none", whiteSpace: "pre-line", color: "#fff", background: "rgba(0,0,0,.65)", borderRadius: 5, padding: "5px 8px", fontSize: 11, lineHeight: 1.5, fontVariantNumeric: "tabular-nums" }}>{text}
+    style={inline ? { whiteSpace: "pre-line", fontSize: 12, lineHeight: 1.6, fontVariantNumeric: "tabular-nums" } : { position: "absolute", top: 10, left: 10, zIndex: 5, pointerEvents: "none", whiteSpace: "pre-line", color: "#fff", background: "rgba(0,0,0,.65)", borderRadius: 5, padding: "5px 8px", fontSize: 11, lineHeight: 1.5, fontVariantNumeric: "tabular-nums" }}>{text}
     {quality?.available && `\nЦель ${quality.requested_kbps === 0 ? "Auto" : quality.requested_kbps ?? "—"} · кодировщик ${quality.applied_kbps ?? "—"} кбит/с${(quality.report_age_ms ?? Infinity) >= 3000 ? " · данные устарели" : ""}`}</div>;
 }

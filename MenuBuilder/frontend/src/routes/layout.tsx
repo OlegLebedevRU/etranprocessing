@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router";
 import { Layout, Menu, Button, Tooltip, Typography, theme, Grid } from "antd";
 import {
@@ -59,15 +59,23 @@ const L4DESK_NAV_ITEMS = [
 ];
 
 export default function AppLayout() {
-  const [collapsed, setCollapsed] = useState(() => window.location.pathname.split("/")[1] === "video");
+  const [collapsed, setCollapsed] = useState(() => ["video", "cameras"].includes(window.location.pathname.split("/")[1]));
   const { user, setUser } = useSession();
   const currentUser = user;
   const navigate = useNavigate();
   const location = useLocation();
   const isVideoRoute = location.pathname.split("/")[1] === "video";
+  const isCameraRoute = location.pathname.split("/")[1] === "cameras";
+  const cameraNavigation = useRef<{ previous: boolean; active: boolean }>({ previous: false, active: false });
   useEffect(() => {
-    if (isVideoRoute) setCollapsed(true);
-  }, [isVideoRoute]);
+    if (isCameraRoute && !cameraNavigation.current.active) {
+      cameraNavigation.current = { previous: collapsed, active: true };
+      setCollapsed(true);
+    } else if (!isCameraRoute && cameraNavigation.current.active) {
+      setCollapsed(isVideoRoute || cameraNavigation.current.previous);
+      cameraNavigation.current.active = false;
+    } else if (isVideoRoute) setCollapsed(true);
+  }, [isVideoRoute, isCameraRoute]);
   const { token } = theme.useToken();
   const screens = Grid.useBreakpoint();
   const isXs = screens.xs;
@@ -173,7 +181,7 @@ export default function AppLayout() {
         width={196}
         collapsedWidth={56}
         breakpoint="lg"
-        onBreakpoint={(broken) => setCollapsed(broken || isVideoRoute)}
+        onBreakpoint={(broken) => setCollapsed(broken || isVideoRoute || isCameraRoute)}
         trigger={null}
         style={{
           borderInlineEnd: `1px solid ${token.colorBorderSecondary}`,
@@ -309,7 +317,7 @@ export default function AppLayout() {
             </Tooltip>
           </div>
         </Header>
-        <Content style={{ padding: isVideoRoute ? 8 : isXs ? 8 : 16 }}>
+        <Content style={{ padding: isCameraRoute ? 6 : isVideoRoute ? 8 : isXs ? 8 : 16 }}>
           {isPlatformMode &&
           ["monitoring", "menu", "reports", "billing", "integrations", "licenses", "console", "mcp"].includes(segment) ? (
             <div
