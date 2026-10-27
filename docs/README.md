@@ -1,5 +1,7 @@
 # Документация экосистемы etranprocessing
 
+- [Camera adaptive quality candidate](etran_arch-camera-adaptive-quality-candidate.md) — proposed quality payload, BFF parser and explicit offline/runtime boundary.
+
 - [Session lifecycle55](menu_arch-session-lifecycle55.md) — bounded keepalive and STOP semantics.
 - [Native Auto cadence proposal](etran_arch-native-auto-cadence.md) — original-RTP FPS observation and parser handoff.
 

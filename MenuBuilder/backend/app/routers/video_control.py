@@ -56,6 +56,7 @@ from app.services.camera_contract import (
     media_contract_options,
 )
 from app.services.camera_media_clock import camera_media_deadline
+from app.services.camera_quality_candidate import CameraQualityCandidate
 from app.services.iot_client import iot_client
 from app.services.media_orchestrator_client import (
     MediaOrchestratorError,
@@ -1030,6 +1031,11 @@ async def start_device_stream(
             browser=browser,
             user=user,
             admission_ticket=body.camera_admission_ticket,
+            **(
+                {"quality_writer_key": str(quality_writer_key)}
+                if quality_writer_key
+                else {}
+            ),
         )
     elif body.codec_policy is not None:
         if body.browser_codecs is None:
@@ -1499,7 +1505,7 @@ async def get_device_stream_quality(
 @router.post("/devices/{device_id}/stream/quality")
 async def set_device_stream_quality(
     device_id: int,
-    body: RuntimeQualityRequest,
+    body: RuntimeQualityRequest | CameraQualityCandidate,
     user: dict[str, Any] = Depends(require_operator_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
@@ -1512,8 +1518,12 @@ async def set_device_stream_quality(
         "quality-set",
         org_id=org_id,
         user=user,
-        lease_id=str(body.lease_id),
-        payload=body.model_dump(mode="json", exclude={"lease_id"}, exclude_none=True),
+        lease_id=body.root["lease_id"]
+        if isinstance(body, CameraQualityCandidate)
+        else str(body.lease_id),
+        payload=body.provider_payload()
+        if isinstance(body, CameraQualityCandidate)
+        else body.model_dump(mode="json", exclude={"lease_id"}, exclude_none=True),
     )
 
 

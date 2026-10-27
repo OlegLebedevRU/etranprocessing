@@ -73,6 +73,7 @@ export class DesktopQualityPolicy {
     if (pressure) this.clearSince = null;
     if (quality.status === "pending" || now - this.lastChange < 1000) return null;
     const current = quality.applied_kbps, ceiling = quality.ceiling_kbps;
+    const floor = quality.bitrate_min_kbps === undefined ? 100 : Math.max(1, quality.bitrate_min_kbps);
     let target: number | null = null;
     let targetStep = step;
     if (pressure) {
@@ -83,14 +84,18 @@ export class DesktopQualityPolicy {
         this.rasterRetryMs = Math.min(30000, this.rasterRetryMs * 2);
         this.raisedStep = null;
       }
-      target = Math.max(100, Math.floor(current * 0.5));
+      target = Math.max(floor, Math.floor(current * 0.5));
+      // A camera may acknowledge configuration while its encoder clamps the
+      // actual target. Do not resend the same ineffective reduction forever;
+      // upward recovery remains available once pressure clears.
+      if (quality.quality_revision && target === quality.requested_kbps && target !== current) return null;
       // One half-size raster has one quarter of the pixels. A known large IDR
       // needs that reduction immediately: lowering mean bitrate cannot remove
       // a keyframe already queued on the link. Use the same 200 ms queue budget,
       // not a second arbitrary threshold or a hardware-specific alignment.
       const oversizedIdr = (quality.last_idr_bytes ?? 0) * 8 > target * 200;
       if (quality.raster_available && quality.initial_width && quality.initial_height
-        && (oversizedIdr || target <= ceiling / 4 ** (step + 1)) && ceiling / 4 ** (step + 1) >= 100
+        && (oversizedIdr || target <= ceiling / 4 ** (step + 1)) && ceiling / 4 ** (step + 1) >= floor
         && Math.floor(quality.initial_width / 2 ** (step + 1) / 2) >= 1
         && Math.floor(quality.initial_height / 2 ** (step + 1) / 2) >= 1) targetStep++;
       if (target === current) this.receiverDelayMs = 0; // No actuator headroom: avoid retaining an old offset forever.
@@ -101,7 +106,7 @@ export class DesktopQualityPolicy {
         // Restore the rate budget for the NEXT larger raster before probing it.
         // Four times as many pixels at the old quarter-rate budget can starve
         // an encoder and produce a large IDR even after the network recovers.
-        const nextRasterBudget = Math.max(100, Math.floor(ceiling / 4 ** Math.max(0, step - 1)));
+        const nextRasterBudget = Math.max(floor, Math.floor(ceiling / 4 ** Math.max(0, step - 1)));
         if (step > 0 && current >= nextRasterBudget) {
           if (now - this.rasterFailedAt >= this.rasterRetryMs) {
             target = current; targetStep--;

@@ -10,6 +10,22 @@ const stat = (n: number, lost = 0, decoded = n * 10) => ({ timestamp: n * 1000,
 const raster = { ...nominal, raster_available: true, raster_step: 0,
   initial_width: 3000, initial_height: 2000 };
 
+it("uses the camera's declared bitrate range while retaining the desktop floor", () => {
+  const value = { ...nominal, applied_kbps: 120, transport_pressure: true };
+  expect(new DesktopQualityPolicy().observe(value, stat(1), 1000)).toBe(100);
+  expect(new DesktopQualityPolicy().observe({ ...value, quality_revision: "l4-quality/1.0.0", bitrate_min_kbps: 0 }, stat(1), 1000)).toBe(60);
+  expect(new DesktopQualityPolicy().observe({ ...value, quality_revision: "l4-quality/1.0.0", bitrate_min_kbps: 80 }, stat(1), 1000)).toBe(80);
+});
+
+it("does not repeat a clamped camera reduction and can recover upward", () => {
+  const policy = new DesktopQualityPolicy();
+  const camera = { ...nominal, quality_revision: "l4-quality/1.0.0", bitrate_min_kbps: 0,
+    ceiling_kbps: 5000, applied_kbps: 128, requested_kbps: 64 };
+  expect(policy.observe({ ...camera, transport_pressure: true }, stat(1), 1000)).toBeNull();
+  for (let n = 2; n < 7; n++) expect(policy.observe(camera, stat(n), n * 1000)).toBeNull();
+  expect(policy.observe(camera, stat(7), 7000)).toBe(628);
+});
+
 it("shrinks a measured oversized IDR at the first pressure cut, preserving the old no-pressure path", () => {
   const large = { ...raster, last_idr_bytes: 467000 };
   expect(new DesktopQualityPolicy().observeTarget(large, stat(1), 1000)).toBeNull();

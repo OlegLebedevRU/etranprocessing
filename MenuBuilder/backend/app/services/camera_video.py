@@ -176,6 +176,7 @@ class NativeCameraVideo:
         browser,
         user,
         admission_ticket=None,
+        quality_writer_key=None,
     ):
         from app.config import settings
         from app.services.camera_admission import CameraAdmission, unseal
@@ -312,6 +313,11 @@ class NativeCameraVideo:
                     org_id=terminal.org_id,
                     user=user,
                     camera_contract=CAMERA_MEDIA_REVISION,
+                    **(
+                        {"quality_writer_key": quality_writer_key}
+                        if quality_writer_key
+                        else {}
+                    ),
                 )
             )
             if any(

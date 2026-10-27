@@ -21,6 +21,47 @@ context = hevc_fixtures.context
 
 
 @pytest.mark.anyio
+async def test_camera_quality_preserves_native_target_above_desktop_budget(
+    mock_db_session, superuser_token
+):
+    app.dependency_overrides[get_db] = lambda: mock_db_session
+    stream, lease, writer = str(uuid4()), str(uuid4()), str(uuid4())
+    with (
+        patch(
+            "app.routers.video_control._verify_device_access",
+            new=AsyncMock(return_value=SimpleNamespace(sn="fixture", org_id=1)),
+        ),
+        patch.object(
+            iot_client,
+            "remote_video_v2",
+            new=AsyncMock(return_value={"accepted": True}),
+        ) as provider,
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            result = await client.post(
+                "/api/v1/video/devices/1/stream/quality",
+                headers={"Authorization": f"Bearer {superuser_token}"},
+                json={
+                    "lease_id": lease,
+                    "stream_instance_id": stream,
+                    "writer_key": writer,
+                    "quality_revision": "l4-quality/1.0.0",
+                    "target": {"target_bitrate_kbps": 8000},
+                },
+            )
+    assert result.status_code == 200
+    assert provider.call_args.kwargs["lease_id"] == lease
+    assert provider.call_args.kwargs["payload"] == {
+        "stream_instance_id": stream,
+        "writer_key": writer,
+        "quality_revision": "l4-quality/1.0.0",
+        "target": {"target_bitrate_kbps": 8000},
+    }
+
+
+@pytest.mark.anyio
 async def test_viewer_can_read_measurements_but_cannot_set_quality(
     mock_db_session, viewer_with_permission_token
 ):

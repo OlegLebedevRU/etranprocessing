@@ -30,11 +30,20 @@ export function useDesktopQuality(session: DesktopQualitySession | null,
         if (abort.signal.aborted) return;
         setQuality(value);
         if (writer) {
+          // A camera starts read-only. The original initiator explicitly grants
+          // source adaptation using the same quality command and native target;
+          // no new handshake or mutation is implied by START-only admission.
+          if (value.quality_revision && value.available && value.generation === 0
+            && value.applied_kbps && value.status !== "pending" && value.status !== "unsupported") {
+            await setRuntimeQuality(device, lease!, stream, value.requested_kbps ?? 0,
+              writerKey!, abort.signal, undefined, value.quality_revision);
+            return;
+          }
           const stats = await readStats();
           if (abort.signal.aborted) return;
           const target = policy.observeTarget(value, stats, performance.now());
           if (target !== null) await setRuntimeQuality(device, lease!, stream, target.kbps,
-            writerKey!, abort.signal, target.rasterStep);
+            writerKey!, abort.signal, target.rasterStep, value.quality_revision);
         }
       } catch (error) {
         const status = (error as { response?: { status?: number } })?.response?.status;

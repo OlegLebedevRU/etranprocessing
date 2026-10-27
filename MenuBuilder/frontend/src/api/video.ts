@@ -14,6 +14,11 @@ export interface VideoSessionResponse {
 
 export type CodecPolicy = "auto" | "h264" | "h265";
 export interface RuntimeQuality {
+  quality_revision?: string;
+  bitrate_min_kbps?: number;
+  requested_kbps?: number;
+  source_origin?: string;
+  persistence?: string;
   available: boolean;
   ceiling_kbps?: number;
   applied_kbps?: number;
@@ -41,9 +46,10 @@ export async function getRuntimeQuality(device: number, stream: string, signal: 
   return data;
 }
 
-export async function setRuntimeQuality(device: number, lease: string, stream: string, kbps: number, writerKey: string, signal: AbortSignal, rasterStep?: number): Promise<void> {
+export async function setRuntimeQuality(device: number, lease: string, stream: string, kbps: number, writerKey: string, signal: AbortSignal, rasterStep?: number, qualityRevision?: string): Promise<void> {
   await client.post(`/v1/video/devices/${device}/stream/quality`, {
-    lease_id: lease, stream_instance_id: stream, target_bitrate_kbps: kbps, writer_key: writerKey,
+    lease_id: lease, stream_instance_id: stream, writer_key: writerKey,
+    ...(qualityRevision ? { quality_revision: qualityRevision, target: { target_bitrate_kbps: kbps } } : { target_bitrate_kbps: kbps }),
     ...(rasterStep === undefined ? {} : { raster_step: rasterStep }),
   }, { signal });
 }
