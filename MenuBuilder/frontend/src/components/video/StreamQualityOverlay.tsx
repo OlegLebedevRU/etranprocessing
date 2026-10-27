@@ -45,7 +45,8 @@ export function StreamQualityOverlay({ stream, profile, codec, videoRef, readSta
           ? `${(100 * lost / (received + lost)).toFixed(2)}%` : "—";
         const format = video?.videoWidth ? `${video.videoWidth}×${video.videoHeight}` : "Размер —";
         const activeCodec = (stats?.codec?.replace(/^video\//i, "") || codec || "Кодек —").toUpperCase();
-        setText(`${profile === "default" ? "HD" : profile === "low" ? "Medium" : ""} · ${activeCodec} · ${format}\nПриём ${mbps} · потери ${loss}\nДекод ${decode} · показ ${display} кадр/с`);
+        const policy = profile === "default" ? "HD" : profile === "low" ? "Medium" : "";
+        setText(`${[policy, activeCodec, format].filter(Boolean).join(" · ")}\nПриём ${mbps} · потери ${loss}\nДекод ${decode} · показ ${display} кадр/с`);
         if (stats) previous = { stats, total: quality?.totalVideoFrames, dropped: quality?.droppedVideoFrames };
       } catch {
         if (!cancelled) setText("Метрики потока временно недоступны");
