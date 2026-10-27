@@ -8,7 +8,7 @@ const labels: Record<string, string> = {
   "video0.codec": "Кодек камеры", "video0.size": "Размер кадра", "video0.fps": "Частота кадров, FPS",
   "video0.bitrate": "Битрейт, кбит/с", "video0.gopSize": "Интервал ключевых кадров", "video0.rcMode": "Управление битрейтом",
   "image.mirror": "Отражение по горизонтали", "image.flip": "Отражение по вертикали", "image.rotate": "Поворот",
-  "image.contrast": "Контраст", "image.brightness": "Яркость", "image.saturation": "Насыщенность",
+  "image.contrast": "Контраст", "image.brightness": "Яркость", "image.luminance": "Яркость", "image.saturation": "Насыщенность",
   "image.hue": "Оттенок", "image.sharpness": "Резкость", "nightMode.lightMonitor": "Автоматический день / ночь",
 };
 

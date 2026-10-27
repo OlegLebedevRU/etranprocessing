@@ -336,7 +336,7 @@ async def require_camera_extension(
         {},
     )
     try:
-        observed = datetime.fromisoformat(snapshot.get("observed_at", ""))
+        observed = datetime.fromisoformat(snapshot.get("received_at") or "")
         age = (datetime.now(UTC) - observed).total_seconds()
         limit = snapshot.get("freshness_max_age_sec", 330)
         fresh = type(limit) in (int, float) and 1 <= limit <= 330 and -5 <= age <= limit

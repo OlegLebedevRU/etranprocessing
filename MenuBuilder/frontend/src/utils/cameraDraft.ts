@@ -2,7 +2,7 @@ import type { CameraField, CameraPatch, CameraState, CameraValue } from "../api/
 
 const allowed = new Set([
   "video0.codec", "video0.size", "video0.fps", "video0.bitrate", "video0.gopSize", "video0.rcMode",
-  "image.mirror", "image.flip", "image.rotate", "image.contrast", "image.brightness", "image.saturation", "image.hue", "image.sharpness",
+  "image.mirror", "image.flip", "image.rotate", "image.contrast", "image.brightness", "image.luminance", "image.saturation", "image.hue", "image.sharpness",
   "nightMode.lightMonitor",
 ]);
 

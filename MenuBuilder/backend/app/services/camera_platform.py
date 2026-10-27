@@ -84,5 +84,7 @@ def camera_snapshot(gauges: dict[str, Any], device_id: int) -> dict[str, Any] | 
         for item in payload.get("300", []):
             snapshot = item.get("450") if isinstance(item, dict) else None
             if isinstance(snapshot, dict):
-                return snapshot
+                # BFF metadata: the gauge receipt is timed by IoT, not by the
+                # camera's optional UTC clock. Never refresh this on an HTTP read.
+                return {**snapshot, "received_at": gauge.get("updated_at")}
     return None

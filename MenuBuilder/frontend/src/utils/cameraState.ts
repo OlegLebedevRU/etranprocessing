@@ -13,7 +13,7 @@ export function observationAge(observed: string | undefined, valid = true, now =
   return age > limit ? "Устарело" : "Актуально";
 }
 export function configFresh(snapshot: CameraSnapshot | null, camera?: CameraState, now = Date.now()): boolean {
-  return !!camera?.config && !camera.stale && observationAge(snapshot?.observed_at, true, now,
+  return !!camera?.config && !camera.stale && observationAge(snapshot?.received_at ?? undefined, true, now,
     snapshot?.freshness_max_age_sec ?? 330) === "Актуально";
 }
 export function powerFresh(snapshot: CameraSnapshot | null, camera?: CameraState, now = Date.now()): boolean {

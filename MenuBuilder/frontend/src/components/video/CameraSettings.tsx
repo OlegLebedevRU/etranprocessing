@@ -242,7 +242,7 @@ export function CameraSettings({ device, org, operator, viewing, freshFrames = f
     { key: "browser", label: "Просмотр", children: freshFrames ? "Кадры поступают" : "Нет подтверждённых кадров в браузере" },
     { key: "power", label: "Выход питания", children: powerValid ? camera?.power?.enabled ? "Включён" : "Выключен" : "Не подтверждён" },
     { key: "night", label: "Ночной режим", children: probeAge(camera?.telemetry) === "Актуально" && (night === 0 || night === 1) ? night === 1 ? "Включён" : "Выключен" : "Не подтверждён" },
-    { key: "age", label: "Состояние", children: observationAge(snapshot?.observed_at, !!snapshot, now, snapshot?.freshness_max_age_sec ?? 330) },
+    { key: "age", label: "Состояние получено", children: observationAge(snapshot?.received_at ?? undefined, !!snapshot, now, snapshot?.freshness_max_age_sec ?? 330) },
     { key: "details", label: "Подробности", children: <Collapse ghost size="small" items={[{ key: "details", label: "Устройство и возможности", children: <Space orientation="vertical" size={3}>
       <Typography.Text>OpenIPC {camera?.identity?.openipc_version || "—"} · Majestic {camera?.identity?.majestic_version || "—"}</Typography.Text>
       <Typography.Text>Port-2 · {camera?.discovery?.ethernet_mode || "Режим неизвестен"}</Typography.Text>
