@@ -991,6 +991,13 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
     startAttemptRef.current?.cancel();
     if (!selectedDevice) return;
     setStreamStage("stopping");
+    if (cameraOnly) {
+      // The coordinator owns the single STOP and lease release, including a
+      // lease acquired before START. Joining observers only detach locally.
+      await stopSession("operator_stop");
+      message.info("Трансляция остановлена");
+      return;
+    }
     try {
       const curLease = coordinatorRef.current.session?.leaseId || activeLeaseId;
       if (curLease) {
