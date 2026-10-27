@@ -515,10 +515,15 @@ test("camera toolbar remains one compact row on desktop and mobile without impli
     await page.setViewportSize({ width, height: 860 });
     const toolbar = page.getByRole("toolbar");
     await expect(toolbar).toBeVisible();
+    await expect(page.locator(".ant-layout-sider")).toHaveClass(/ant-layout-sider-collapsed/);
     const box = await toolbar.boundingBox();
     expect(box!.height).toBeLessThanOrEqual(46);
     expect(await toolbar.evaluate(el => el.scrollWidth <= el.clientWidth + 2)).toBe(true);
   }
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await expect(page.locator(".ant-layout-sider")).toHaveClass(/ant-layout-sider-collapsed/);
+  await page.getByRole("button", { name: "Развернуть разделы" }).click();
+  await expect(page.locator(".ant-layout-sider")).not.toHaveClass(/ant-layout-sider-collapsed/);
   expect(posts).toEqual([]);
 });
 

@@ -1237,7 +1237,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
                   : <Alert type="warning" showIcon message="Качество временно снижено для уменьшения задержки" />)}
               <VideoPlayerScreen
                 qualityOverlay={(!cameraOnly || showCameraStats) && activeStream?.stream_instance_id ? <StreamQualityOverlay
-                  stream={activeStream.stream_instance_id} profile={activeStream.descriptor?.profile_id}
+                  stream={activeStream.stream_instance_id} profile={cameraOnly ? undefined : activeStream.descriptor?.profile_id}
                   codec={activeStream.descriptor?.tracks[0]?.codec} videoRef={videoRef} readStats={readQualityStats} quality={runtimeQuality} /> : null}
                 fullSourceFrame={activeStream?.descriptor?.contract_version === 3
                   && activeStream.descriptor.source_type === "desktop"}

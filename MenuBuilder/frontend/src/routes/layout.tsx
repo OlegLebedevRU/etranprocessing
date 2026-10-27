@@ -176,7 +176,7 @@ export default function AppLayout() {
       <Sider
         collapsible
         collapsed={collapsed}
-        onCollapse={setCollapsed}
+        onCollapse={(next, type) => setCollapsed(type === "responsive" ? next || isVideoRoute || isCameraRoute : next)}
         theme="light"
         width={196}
         collapsedWidth={56}
@@ -271,6 +271,7 @@ export default function AppLayout() {
             type="text"
             size="small"
             icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            aria-label={collapsed ? "Развернуть разделы" : "Свернуть разделы"}
             onClick={() => setCollapsed((v) => !v)}
           />
           <Text strong style={{ marginLeft: isXs ? 6 : 12, fontSize: isXs ? 13 : 14 }} ellipsis>
