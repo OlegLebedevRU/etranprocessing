@@ -5,7 +5,7 @@
 - Цель: при перегрузке сохранять свежую картинку, допуская пропуски и временное снижение качества; единственный runtime-контроллер качества — первичный инициатор сессии.
 - Native: ветка `perf/l4capture-desktop-pacing`, commit `eb10421cbc66b48929666908f63ca67748787ea5`, [draft PR11](https://github.com/OlegLebedevRU/l4tools/pull/11). Код опубликован после явного разрешения оператора. Подпись, упаковка и выпуск бинарников отложены.
 - Native worktree: `D:\repo\platerra\Public\etranprocessing\.worktrees\l4capture-desktop-pacing`; основной репозиторий tools: `D:\repo\platerra\Public\l4tools`.
-- MenuBuilder: ветка `fix/desktop-receiver-queue` от main `6a6a9832ac8055a9969ec31a653bdc775c3549de`; изменены только политика frontend, её тест и документация. Backend/app1 в этой итерации не менялись.
+- MenuBuilder: [PR136](https://github.com/OlegLebedevRU/etranprocessing/pull/136), code commit `b6651368fb8692c864a59e5b8f6888094340c0c0`, ветка `fix/desktop-receiver-queue` от main `6a6a9832ac8055a9969ec31a653bdc775c3549de`; изменены только политика frontend, её тест и документация. Backend/app1 в этой итерации не менялись.
 - Producer/consumer: исходный браузер -> MenuBuilder -> app1 -> l4desk -> l4capture; RTP через leo4proxy/Janus -> браузер. Proxy сообщает измерения и не выбирает качество. Writer key/org/user/lease/epoch/generation, STOP/expiry и final-send gate сохранены. Начальный снимок геометрии ввода не заменяется live-размером кодирования.
 - Старые H264-агенты не обязаны выполнять optional runtime/raster-контракт. Совместимость старых IPC-layout проверена по коду; живой старый бинарник недоступен по согласованию.
 
@@ -54,7 +54,8 @@
 
 ## Что осталось / выпуск
 
-- [ ] Опубликовать/слить отдельный frontend follow-up и адресно развернуть только MenuBuilder frontend; предыдущие PR134/PR156 уже deployed, backend/app1 повторно не нужны. До этого браузерные результаты относятся к локально поданному candidate dist при реальных production API/media.
+- [x] Опубликовать frontend follow-up PR136.
+- [ ] Слить PR136 и адресно развернуть только MenuBuilder frontend; предыдущие PR134/PR156 уже deployed, backend/app1 повторно не нужны. До этого браузерные результаты относятся к локально поданному candidate dist при реальных production API/media.
 - [ ] Финальный native signing/packaging/publication — отдельный согласованный этап.
 - [ ] Старый агент live E2E недоступен; реальные слабые uplink источника/другая аппаратура не проверены. Проверялось ограничение browser downlink1Mbps, без гарантии для любых слабых каналов.
 - Ограничения: начальный крупный IDR может дать секундный пик; software H264 на DISPLAY1 ограничен CPU; более частые пробы30с означают согласованные краткие пропуски. Пустой/статичный экран не считается доказательством запаса канала.
