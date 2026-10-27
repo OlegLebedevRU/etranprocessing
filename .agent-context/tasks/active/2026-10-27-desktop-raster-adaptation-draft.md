@@ -1,6 +1,20 @@
+# Выпуск завершён — 27.10.2026
+
+- Оператор разрешил публикацию исходников, merge/deploy frontend и выпуск l4tools. Этот итог заменяет прежние статусы «отложено» в исторических разделах ниже.
+- Frontend PR136 merged/deployed: `464b9ac8b3c58f85e8034e9b37cbefa934515e60`; image digest `sha256:697b01692bbe9d866d9d517aa1e1e44827770edf067a19c437fdf5f3eb063908`. Стандартный builder launcher; nginx/backend/app1 не перезапускались. Production smoke подтверждён на `/assets/index-Ce50-6sy.js`, STOP подтверждён сервером.
+- Native PR11 merged, source `6b577b0f226fb7ecf7ddf01691b63985d02f1c81`. Подписанный candidate **1.13.55 опубликован**, без stable promotion и без установки на773.
+- [Установщик1.13.55](https://l4tools-generic.ar.cloud.ru/l4tools/1.13.55/l4setup.exe), 30,992,440 bytes; SHA256 `75ffc2a485ce073e02f7535dd5c6b4dce99df7818534445b7c2d48b170e651a6`.
+- Standard report `tools/dist/.release/1.13.55/report.json`: `published_candidate`, clean_at_start=true; version/sign/verify-signed/publish passed. Семь новых подписанных EXE (три изменённых компонента x86/x64 и setup);14 неизменённых signed EXE сохранены побайтно. Проверены70 embedded files на архитектуру. Remote manifest hash и размер installer совпали с локальными.
+- Selective-release tests25, Ruff/Pyright прошли. Desk/proxy build_all и целевые проверки x86/x64 прошли; capture D8 повторно не пересобирался: сохранённые build/test proofs привязаны к неизменённым исходникам. Baseline1.13.49 проверен по подписанным metadata и142 raw-stage файлам. Frozen helper сохранён.
+- После успешного publish обёртка сообщила Unexpected source mutation: cleanup whitelist не включал штатное добавление publisher в `releases.jsonl`. Это ошибка последующей уборки, не подписи/публикации. Запись сохранена; повторный sign/publish не выполнялся. После выхода контроллера восстановлены только два generated tracked version files. Подписанные артефакты и checkpoints сохранены неизменными.
+- Оба административных контроллера завершены: release response11:46:06Z `Controller stopped; installed tools and release artifacts retained.` Пользовательское окно PowerShell не закрывалось. На773 остаются private test EXE D8DE/AA0B/DA00 под1.13.54; installer55 НЕ запускался, отката не было.
+- Трансляция остановлена; fixture animation и host sampler завершены. Оставлена чистая product-tab Chrome без test overlay/hooks, вход сохранён. Две наши старые test-tab закрыты, чужие вкладки не трогались.
+- Native release handoff: `D:\repo\platerra\Public\etranprocessing\.worktrees\l4capture-desktop-pacing\.agent-context\tasks\2026-10-27-desktop-release55.md`. Полные результаты и ограничения CPU/IDR/старых агентов — ниже. Поздние docs-only commits не меняют исходную ревизию подписанного пакета и не требуют пересборки.
+
+---
 # Desktop raster adaptation — текущий handoff, 27.10.2026
 
-## Состояние и владельцы
+## Состояние до выпуска — исторический checkpoint
 
 - Цель: при перегрузке сохранять свежую картинку, допуская пропуски и временное снижение качества; единственный runtime-контроллер качества — первичный инициатор сессии.
 - Native: ветка `perf/l4capture-desktop-pacing`, commit `eb10421cbc66b48929666908f63ca67748787ea5`, [draft PR11](https://github.com/OlegLebedevRU/l4tools/pull/11). Код опубликован после явного разрешения оператора. Подпись, упаковка и выпуск бинарников отложены.
