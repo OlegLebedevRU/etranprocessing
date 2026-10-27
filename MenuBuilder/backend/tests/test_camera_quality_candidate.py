@@ -10,7 +10,7 @@ from app.services.camera_quality_candidate import CameraQualityCandidate
 
 def request(target):
     return {
-        "quality_revision": "l4-quality/0.1.0-proposed",
+        "quality_revision": "l4-quality/1.0.0",
         "lease_id": str(uuid4()),
         "stream_instance_id": str(uuid4()),
         "writer_key": str(uuid4()),

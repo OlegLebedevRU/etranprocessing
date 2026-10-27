@@ -7,6 +7,7 @@ import {
   Card,
   Drawer,
   Grid,
+  Switch,
   message,
   Typography,
 } from "antd";
@@ -40,6 +41,7 @@ import { JanusStreamingClient } from "../api/janusClient";
 import { useSession } from "../session/SessionContext";
 import { useRemoteControl } from "../hooks/useRemoteControl";
 import { useDesktopQuality } from "../hooks/useDesktopQuality";
+import { StreamQualityOverlay } from "../components/video/StreamQualityOverlay";
 import { hasPermission, PERMISSION_VIDEO_VIEW } from "../utils/permissions";
 
 // Новые переработанные UX/UI компоненты
@@ -225,6 +227,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
 
   // Медиаплеер и WebRTC сессия
   const [isSessionActive, setIsSessionActive] = useState<boolean>(false);
+  const [adaptiveQuality, setAdaptiveQuality] = useState(true);
   const [statusText, setStatusText] = useState<string>("Не запущена");
   const [activeLeaseId, setActiveLeaseId] = useState<string | null>(null);
 
@@ -392,13 +395,14 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
     janusClientRef.current?.getVideoReceiveStats() ?? null, []);
   const coordinatedSession = coordinatorRef.current.session;
   const runtimeQuality = useDesktopQuality(
-    isSessionActive && activeStream?.mode === "desktop" && activeStream.stream_instance_id
+    isSessionActive && (activeStream?.mode === "desktop" || cameraOnly) && activeStream?.stream_instance_id
       && selectedDevice ? {
         device: selectedDevice.device_id,
         lease: coordinatedSession?.leaseId ?? "",
         stream: activeStream.stream_instance_id,
         writerKey: coordinatedSession?.qualityWriterKey,
         publisher: coordinatedSession?.publisherOwned !== false
+          && (!cameraOnly || adaptiveQuality)
           && coordinatedSession?.streamInstanceId === activeStream.stream_instance_id
           && !!coordinatedSession?.leaseId,
       } : null, readQualityStats);
@@ -849,7 +853,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
       const colonIdx = selectedSourceKey.indexOf(":");
       const mode = colonIdx !== -1 ? selectedSourceKey.slice(0, colonIdx) : "desktop";
       const source_id = colonIdx !== -1 ? selectedSourceKey.slice(colonIdx + 1) : "0";
-      const qualityWriterKey = !cameraOnly && mode === "desktop" ? crypto.randomUUID() : undefined;
+      const qualityWriterKey = cameraOnly || mode === "desktop" ? crypto.randomUUID() : undefined;
       setStatusText("Запуск видеопотока на терминале...");
 
       const startRes = await startDeviceStream(selectedDevice.device_id, {
@@ -1201,7 +1205,15 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
                   type="warning" showIcon
                   message="Качество временно снижено для уменьшения задержки"
                 />}
+              {cameraOnly && isSessionActive && coordinatedSession?.qualityWriterKey
+                && coordinatedSession.publisherOwned !== false && <div style={{ display: "flex", gap: 7, alignItems: "center", marginBottom: 8 }}>
+                  <Switch size="small" checked={adaptiveQuality} onChange={setAdaptiveQuality} aria-label="Автоадаптация по приёму" />
+                  <Text type="secondary">Автоадаптация по приёму</Text>
+                </div>}
               <VideoPlayerScreen
+                qualityOverlay={activeStream?.stream_instance_id ? <StreamQualityOverlay
+                  stream={activeStream.stream_instance_id} profile={activeStream.descriptor?.profile_id}
+                  codec={activeStream.descriptor?.tracks[0]?.codec} videoRef={videoRef} readStats={readQualityStats} quality={runtimeQuality} /> : null}
                 fullSourceFrame={activeStream?.descriptor?.contract_version === 3
                   && activeStream.descriptor.source_type === "desktop"}
                 cameraOnly={cameraOnly}

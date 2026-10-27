@@ -31,6 +31,7 @@ export interface VideoPlayerScreenProps {
   cameraOnly?: boolean;
   streamMode?: string;
   fullSourceFrame?: boolean;
+  qualityOverlay?: React.ReactNode;
   onRetryStream?: () => void;
   onRefreshTerminal?: () => void;
   // Remote control
@@ -62,6 +63,7 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
   cameraOnly,
   streamMode,
   fullSourceFrame,
+  qualityOverlay,
   onRetryStream,
   onRefreshTerminal,
   rc,
@@ -321,6 +323,7 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
         />
       </div>
 
+      {isSessionActive && qualityOverlay}
       {/* Оверлей управления мышью и клавиатурой */}
       <RemoteControlOverlay
         fullSourceFrame={fullSourceFrame}
