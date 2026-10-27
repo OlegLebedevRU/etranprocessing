@@ -1,8 +1,8 @@
 # Desktop runtime quality: one publisher channel
 
-The deployed bitrate extension supports NV12/HEVC. The current candidate adds
-I420/OpenH264 and optional coded-raster changes through the same publisher channel;
-these additions still need combined browser acceptance. Existing START schemas
+The deployed API supports NV12/HEVC, I420/OpenH264 and optional coded-raster
+changes through the same publisher channel. Native and browser policy follow-up
+changes still need combined browser acceptance. Existing START schemas
 and initial descriptors remain unchanged. Old agents keep ordinary streaming
 without mandatory adaptation. No migration is required.
 
@@ -89,15 +89,27 @@ rebases this reference; continuing growth still prevents recovery.
 After five clear seconds with fresh
 transport measurements and decoded frames, recovery adds 10% of the selected
 profile ceiling. The minimum actuator request is 100 kbit/s; the maximum is the
-original profile ceiling (low 2000/default 4000). A driver refusal disables this
+original profile ceiling (low 2000/default 4000). A parameter refusal disables this
 optional adaptation instead of stopping the stream. These policy coefficients
 still require constrained-link acceptance; they are not hardware capabilities.
+Actual encoder/device failure retains the existing terminal stream failure path.
 
 The candidate uses the source's effective ceiling when lower than the selected
 profile. At a quarter bitrate budget per tier, it can halve both dimensions while
-keeping comparable bits/pixel. The existing100kbit/s floor bounds automatic tiers.
-Recovery probes one sharper tier at unchanged bitrate; failed probes double the
-retry interval. These choices need A/B/A and long-run evidence.
+keeping comparable bits/pixel. A measured oversized IDR allows the first half-size
+step earlier: its serialization at the reduced target would exceed the same200ms
+queue budget. This is a nominal-rate estimate after measured pressure, not a
+measurement of available link capacity. The existing100kbit/s floor bounds tiers.
+
+Recovery restores the bitrate budget of the next larger raster first:
+`effective_ceiling / 4^(step-1)`, bounded by the original profile. It then probes
+that raster at unchanged bitrate. For example,750×500@125 first recovers to500
+before1500×1000; the next step needs2000 before3000×2000. Increasing pixels fourfold
+while retaining the old quarter-rate budget starved the tested encoder during
+recovery. No vendor-specific minimum bitrate is inferred from that observation.
+Failed sharper probes double the retry interval up to the operator-approved 30-second cooldown; clear delivery never reduces
+bitrate merely because a probe is deferred. These choices need A/B/A and long-run
+evidence. A resolution confirmation cannot erase a large frame already in transit.
 
 Optional [framesReceived](https://www.w3.org/TR/webrtc-stats/#dom-rtcinboundrtpstreamstats-framesreceived)
 counts complete frames before decoding. Continued RTP without complete frames and
@@ -120,6 +132,17 @@ survives replacement/expiry. There is one borrowed completed AU and no growing
 encoded-frame queue. Main retains RTP, IPC and the final lease/session send gate.
 Allocation/thread failure falls back to the existing synchronous path.
 
+Async MF NeedInput and HaveOutput are independent. Pending output must not block
+new input requested by the transform; MF retains its own copied sample while the
+worker releases its raw slot for fresh work. Ready output takes priority and its
+own sample PTS is preserved across buffering/skips. HEVC still validates timestamp
+range/order and negotiated format. Event credits are counted without assuming a
+two-event hardware queue. A temporarily busy rate setter remains pending, with
+newer generation/target taking precedence; it is not a confirmed refusal.
+[Microsoft's event model](https://learn.microsoft.com/en-us/windows/win32/medfound/asynchronous-mfts)
+permits input requests before output. Existing pipeline STOP and watchdogs remain
+authoritative; genuine HRESULT failures are not hidden by increasing deadlines.
+
 The optional local RTCP APP extension carries producer rate announcements and
 proxy measurements only. It is bound to the current loopback producer/SSRC and
 is not accepted from downstream observers. The proxy never selects bitrate.
@@ -131,6 +154,12 @@ encoding the sample that aged during the change. The existing TCP send window is
 retained; shrinking it to16KB manufactured pressure on a healthy WAN. TLS
 send failure discards the failed connection's unsent bytes rather than resuming
 a partial record as another frame. The local queue budget is 200 ms.
+
+An optional loopback RTP send-clock extension measures actual local transport
+age independently of capture/encode time. Proxy strips it before WAN forwarding;
+legacy producers retain the previous source-clock path. This avoids calling a
+cold encoder's slow first frame a transport backlog. H264 STAP-A is recognized as
+keyframe/parameter repair because the existing AVC packetizer emits that format.
 
 This is not an absolute 200 ms capture-to-display guarantee. Relative RTP queue
 age cannot prove compositor latency, and large keyframes, the driver and TCP
@@ -152,3 +181,18 @@ Remaining: coordinated app1/BFF/native integration, rejection from a second
 authenticated tab, displays 1 and 2, constrained-link reduction/recovery and the
 agreed long run. Debug binaries are unsigned; final signing/publication is
 deferred until improvement or status quo is confirmed with the owner.
+
+### Software processing follow-up (candidate, 2026-10-27)
+
+Modern H.264 full-field reductions use a reusable separable area workspace. Horizontal overlap spans are cached per geometry; only one horizontal row and one accumulator row are retained. Common weight factors are cancelled without changing rounding. Scalar and optional CPU-checked SSE2 paths match the existing 2D area reference byte for byte; allocation failure uses that reference. No new hardware admission condition is introduced. Legacy profile scaling remains unchanged.
+
+The control thread polls IPC and completed encoded output between capture and scaling, in addition to the normal loop poll. Every send still passes the existing session/STOP/deadline gate; the capture frame is released before an observed STOP exits processing. There is no additional frame queue or autonomous native quality controller.
+
+OpenH264 runtime maximum bitrate updates both the global setting and spatial-layer0. Updating `SPATIAL_LAYER_ALL` alone leaves the initialized `iMaxSpatialBitrate` unchanged and can reject recovery above that value. The focused actual-encoder regression initializes750/1000kbps, drops/recoveries through1003kbps and reaches1500kbps without reinitialization. [OpenH264 option implementation](https://github.com/cisco/openh264/blob/master/codec/encoder/plus/src/welsEncoderExt.cpp).
+### Desktop compositor diagnostic (Chrome155.0.8059.85, 2026-10-27)
+
+The separate20-second `raster15-trace` diagnostic observed187 decoder callbacks and187 compositor enqueues,184 selected frames, and184 matching rVFC callbacks linked by both media PTS and decoder-buffer RTP timestamp. Three interior enqueued frames were not selected, with zero RTP-loss and decoder-drop deltas. Decoded-frame selection is therefore distinct from network loss here as well as in the earlier camera investigation.
+
+The video compositor `OnBeginFrame` interval was median16.658ms/p9517.669ms;1112 of1135 intervals were within2ms of16.667ms, none within2ms of50ms. Decode-start to callback was median4.056ms/p957.334ms (ordered trace pairing); callback to enqueue0.289/0.652ms; enqueue to selection8.197/16.437ms. Matched rVFC receive-to-expected-display was135.3/215.1ms. These are separate measurements, not an additive absolute capture-to-display estimate. Individual transport trace events lack frame IDs, so packet-to-decode duration is not claimed from those events alone. rVFC receiveTime supplies the frame-level reception boundary.
+
+Tracing and trace-file transfer can disturb playback. The401 callbacks captured across the whole diagnostic include time outside the20-second native trace; use only the184 timestamp-matched frames for correlation. A4.8-second callback gap occurred outside the native trace window during diagnostic transfer/collection; its cause is not isolated, and it is excluded from performance conclusions. Performance acceptance runs disable tracing, visual-clock screen reads, and the Chrome experimental BeginFrame flag.

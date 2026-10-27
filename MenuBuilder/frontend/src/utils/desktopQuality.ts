@@ -78,15 +78,19 @@ export class DesktopQualityPolicy {
     if (pressure) {
       if (this.raisedStep !== null && step <= this.raisedStep) {
         this.rasterFailedAt = now;
-        this.rasterRetryMs *= 2;
+        // Operator-approved compromise: repeated failures reduce probe frequency,
+        // but never impose minutes of extra cooldown after the link recovers.
+        this.rasterRetryMs = Math.min(30000, this.rasterRetryMs * 2);
         this.raisedStep = null;
       }
       target = Math.max(100, Math.floor(current * 0.5));
-      // One half-size raster has one quarter of the pixels. Keep comparable
-      // bits/pixel once the rate budget reaches that tier, rather than impose
-      // GPU alignment or an arbitrary minimum display resolution.
+      // One half-size raster has one quarter of the pixels. A known large IDR
+      // needs that reduction immediately: lowering mean bitrate cannot remove
+      // a keyframe already queued on the link. Use the same 200 ms queue budget,
+      // not a second arbitrary threshold or a hardware-specific alignment.
+      const oversizedIdr = (quality.last_idr_bytes ?? 0) * 8 > target * 200;
       if (quality.raster_available && quality.initial_width && quality.initial_height
-        && target <= ceiling / 4 ** (step + 1) && ceiling / 4 ** (step + 1) >= 100
+        && (oversizedIdr || target <= ceiling / 4 ** (step + 1)) && ceiling / 4 ** (step + 1) >= 100
         && Math.floor(quality.initial_width / 2 ** (step + 1) / 2) >= 1
         && Math.floor(quality.initial_height / 2 ** (step + 1) / 2) >= 1) targetStep++;
       if (target === current) this.receiverDelayMs = 0; // No actuator headroom: avoid retaining an old offset forever.
@@ -94,13 +98,16 @@ export class DesktopQualityPolicy {
       && previous && stats && stats.framesDecoded > previous.framesDecoded) {
       this.clearSince ??= now;
       if (now - this.clearSince >= 5000) {
-        const tierCeiling = quality.raster_available ? Math.max(100, Math.floor(ceiling / 4 ** step)) : ceiling;
-        if (step > 0 && current >= tierCeiling && now - this.rasterFailedAt >= this.rasterRetryMs) {
-          // Probe one sharper raster at the same bitrate; do not multiply the
-          // network demand by four as part of the resolution transition.
-          target = current; targetStep--;
-          this.raisedStep = targetStep;
-        } else target = Math.min(tierCeiling, current + Math.max(1, Math.floor(tierCeiling * 0.1)));
+        // Restore the rate budget for the NEXT larger raster before probing it.
+        // Four times as many pixels at the old quarter-rate budget can starve
+        // an encoder and produce a large IDR even after the network recovers.
+        const nextRasterBudget = Math.max(100, Math.floor(ceiling / 4 ** Math.max(0, step - 1)));
+        if (step > 0 && current >= nextRasterBudget) {
+          if (now - this.rasterFailedAt >= this.rasterRetryMs) {
+            target = current; targetStep--;
+            this.raisedStep = targetStep;
+          }
+        } else target = Math.min(nextRasterBudget, current + Math.max(1, Math.floor(ceiling * 0.1)));
         this.clearSince = now;
       }
     } else this.clearSince = null;
