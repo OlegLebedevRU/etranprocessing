@@ -50,6 +50,7 @@ from app.services.cert_billing import (
     mask_pin,
 )
 from app.services.certificate_permission import validate_pin_permission
+from app.services.csr_signature import valid_terminal_csr_signature
 from app.services.leo4proxy_policy import subscription_allowance
 from app.services.terminal_certificate import terminal_ca as _renewal_ca
 from app.services.terminal_certificate import verified_terminal_identity
@@ -608,7 +609,7 @@ async def _handle_setup(
         )
         return error_response(f"Неверный формат CSR: {e}", code=4)
 
-    if not csr.is_signature_valid:
+    if not valid_terminal_csr_signature(csr):
         cert_logger.warning("SETUP: CSR signature is invalid for pin=%s", mask_pin(pin))
         return error_response("Недействительная подпись CSR", code=4)
 

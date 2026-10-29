@@ -150,6 +150,27 @@ def csr_pair(*, request_ca=False, arbitrary_san=False):
     return key, csr.public_bytes(serialization.Encoding.PEM).decode(), subject
 
 
+@pytest.mark.parametrize("key_size", [2048, 1024])
+def test_xp_sha1_csr_keeps_modern_certificate_policy(configured, key_size):
+    from tests.test_certificate_pin_contract import _generate_csr
+
+    request = _generate_csr(cn=SN, key_size=key_size, legacy_sha1=True)
+    if key_size == 1024:
+        with pytest.raises(ValueError, match="at least 2048"):
+            local_ca.sign_terminal_csr(request, "xp-test-sign", SN, 30)
+        return
+    cert = local_ca.sign_terminal_csr(request, "xp-test-sign", SN, 30)
+    csr = x509.load_pem_x509_csr(request.encode())
+    assert cert.public_key().public_bytes(
+        serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+    ) == csr.public_key().public_bytes(
+        serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    assert cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value == SN
+    assert cert.signature_hash_algorithm is not None
+    assert cert.signature_hash_algorithm.name == "sha256"
+
+
 def request_for(
     cert,
     *,

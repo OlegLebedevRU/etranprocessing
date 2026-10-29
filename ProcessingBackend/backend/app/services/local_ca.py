@@ -15,6 +15,7 @@ from dotenv import dotenv_values
 
 from app.config import settings
 from app.services.ca_trust import terminal_issuer, terminal_root, validate_issuer
+from app.services.csr_signature import valid_terminal_csr_signature
 
 
 def issuing_key_password() -> bytes:
@@ -74,7 +75,7 @@ def issuing_key() -> rsa.RSAPrivateKey:
 
 def sign_terminal_csr(csr_pem: str, sign: str, cn: str, days: int) -> x509.Certificate:
     csr = x509.load_pem_x509_csr(csr_pem.encode())
-    if not csr.is_signature_valid:
+    if not valid_terminal_csr_signature(csr):
         raise ValueError("Invalid CSR signature")
     public_key = csr.public_key()
     if not isinstance(public_key, rsa.RSAPublicKey) or public_key.key_size < 2048:

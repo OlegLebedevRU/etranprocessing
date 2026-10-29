@@ -13,7 +13,7 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.x509.oid import NameOID
 from httpx import ASGITransport, AsyncClient
 
@@ -54,8 +54,10 @@ def _generate_csr(
     device_id: int = 4625,
     org_id: int = 1,
     corrupt_signature: bool = False,
+    key_size: int = 2048,
+    legacy_sha1: bool = False,
 ) -> str:
-    key = rsa.generate_private_key(65537, 2048, default_backend())
+    key = rsa.generate_private_key(65537, key_size, default_backend())
     subject = x509.Name(
         [
             x509.NameAttribute(NameOID.COMMON_NAME, cn),
@@ -69,6 +71,28 @@ def _generate_csr(
     )
     builder = x509.CertificateSigningRequestBuilder().subject_name(subject)
     csr = builder.sign(key, hashes.SHA256(), default_backend())
+    if legacy_sha1:
+        # XEnroll/CSP signs the request using SHA1. Certificate signing remains
+        # the CA's modern policy. Build the fixture without weakening that policy.
+        def der(tag: int, value: bytes) -> bytes:
+            length = len(value)
+            encoded = length.to_bytes((length.bit_length() + 7) // 8, "big")
+            prefix = (
+                bytes([length])
+                if length < 128
+                else bytes([0x80 | len(encoded)]) + encoded
+            )
+            return bytes([tag]) + prefix + value
+
+        request_info = csr.tbs_certrequest_bytes
+        signature = key.sign(request_info, padding.PKCS1v15(), hashes.SHA1())
+        sha1_rsa_algorithm = bytes.fromhex("300d06092a864886f70d0101050500")
+        csr = x509.load_der_x509_csr(
+            der(0x30, request_info + sha1_rsa_algorithm + der(3, b"\x00" + signature))
+        )
+        key.public_key().verify(
+            csr.signature, csr.tbs_certrequest_bytes, padding.PKCS1v15(), hashes.SHA1()
+        )
     csr_pem = csr.public_bytes(serialization.Encoding.PEM).decode("utf-8")
 
     if corrupt_signature:
@@ -549,7 +573,14 @@ async def test_lookup_pin_by_operation_id(test_env):
 
 
 @pytest.mark.anyio
-async def test_terminal_facing_check_flow(test_env):
+@pytest.mark.parametrize(
+    "version,provider",
+    [
+        (None, "Microsoft Enhanced Cryptographic Provider v1.0"),
+        ("26", "Microsoft Software Key Storage Provider"),
+    ],
+)
+async def test_terminal_facing_check_flow(test_env, version, provider):
     db, _terminal = test_env
     pin_row = CertificatePin(
         id=1,
@@ -566,6 +597,7 @@ async def test_terminal_facing_check_flow(test_env):
         tosign_b64 = base64.b64encode(b"sysinfo_test_payload").decode("ascii")
         resp = await client.get(
             f"/api/certificates/?function=check&pin=773773&tosign={tosign_b64}"
+            + (f"&v={version}" if version else "")
         )
         assert resp.status_code == 200
         assert 'encoding="windows-1251"' in resp.text
@@ -575,12 +607,14 @@ async def test_terminal_facing_check_flow(test_env):
         certdata = root.find("CERTDATA")
         assert certdata is not None
         assert certdata.findtext("catype") == "SubCA"
+        assert certdata.findtext("prov") == provider
         assert certdata.findtext("pin") == "773773"
         assert "CN=a2b0004625c18468d030726" in (certdata.findtext("dn") or "")
 
 
 @pytest.mark.anyio
-async def test_terminal_facing_setup_success(test_env):
+@pytest.mark.parametrize("legacy_sha1", [False, True])
+async def test_terminal_facing_setup_success(test_env, legacy_sha1):
     db, terminal = test_env
     pin_row = CertificatePin(
         id=1,
@@ -593,7 +627,11 @@ async def test_terminal_facing_setup_success(test_env):
     db.pins.append(pin_row)
 
     csr_pem = _generate_csr(
-        cn="a2b0004625c18468d030726", device_id=4625, org_id=1, corrupt_signature=False
+        cn="a2b0004625c18468d030726",
+        device_id=4625,
+        org_id=1,
+        corrupt_signature=False,
+        legacy_sha1=legacy_sha1,
     )
     cpserial = "B2B829B03880E5FAAFC143A2F2D357F0"
 
@@ -738,7 +776,8 @@ async def test_terminal_facing_setup_csr_mismatch_cn(test_env):
 
 
 @pytest.mark.anyio
-async def test_terminal_facing_setup_invalid_csr_signature(test_env):
+@pytest.mark.parametrize("legacy_sha1", [False, True])
+async def test_terminal_facing_setup_invalid_csr_signature(test_env, legacy_sha1):
     db, _terminal = test_env
     pin_row = CertificatePin(
         id=1,
@@ -756,6 +795,7 @@ async def test_terminal_facing_setup_invalid_csr_signature(test_env):
         device_id=4625,
         org_id=1,
         corrupt_signature=True,
+        legacy_sha1=legacy_sha1,
     )
     cpserial = "B2B829B03880E5FAAFC143A2F2D357F0"
 
@@ -839,33 +879,61 @@ async def test_row_locking_concurrency_protection():
 
 
 @pytest.mark.anyio
-async def test_setup_admin_override_is_authenticated_and_bypasses_classic_payment(test_env, monkeypatch):
+async def test_setup_admin_override_is_authenticated_and_bypasses_classic_payment(
+    test_env, monkeypatch
+):
     from app.models import Org, OrgBillingSettings
 
     db, terminal = test_env
     monkeypatch.setattr(settings, "product_scope_split_enabled", True)
     monkeypatch.setattr(settings, "service_auth_token", "fixture-internal-key")
     monkeypatch.setattr(settings, "internal_service_key", "")
-    monkeypatch.setattr(db, "get", AsyncMock(return_value=Org(site_mode="classic")), raising=False)
-    monkeypatch.setattr(db, "scalar", AsyncMock(return_value=OrgBillingSettings(
-        billing_mode="prepaid", tenant_pin_creation_enabled=True,
-        cert_billing_mode="per_operation", cert_price_minor=100,
-        cert_charge_primary_issue=True, cert_charge_reissue=True,
-    )), raising=False)
-    request = {"operation_id": "manual-admin-permission", "tenant_id": terminal.org_id,
-               "terminal_id": terminal.id, "sn": terminal.sn}
+    monkeypatch.setattr(
+        db, "get", AsyncMock(return_value=Org(site_mode="classic")), raising=False
+    )
+    monkeypatch.setattr(
+        db,
+        "scalar",
+        AsyncMock(
+            return_value=OrgBillingSettings(
+                billing_mode="prepaid",
+                tenant_pin_creation_enabled=True,
+                cert_billing_mode="per_operation",
+                cert_price_minor=100,
+                cert_charge_primary_issue=True,
+                cert_charge_reissue=True,
+            )
+        ),
+        raising=False,
+    )
+    request = {
+        "operation_id": "manual-admin-permission",
+        "tenant_id": terminal.org_id,
+        "terminal_id": terminal.id,
+        "sn": terminal.sn,
+    }
     headers = {"X-Internal-Service-Key": "fixture-internal-key"}
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        refused = await client.post("/api/certificates/pins/issue", json=request, headers=headers)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        refused = await client.post(
+            "/api/certificates/pins/issue", json=request, headers=headers
+        )
         assert refused.status_code == 402
         assert not db.pins
         request["admin_override"] = True
-        unauthenticated = await client.post("/api/certificates/pins/issue", json=request)
+        unauthenticated = await client.post(
+            "/api/certificates/pins/issue", json=request
+        )
         assert unauthenticated.status_code == 401
         assert not db.pins
-        issued = await client.post("/api/certificates/pins/issue", json=request, headers=headers)
+        issued = await client.post(
+            "/api/certificates/pins/issue", json=request, headers=headers
+        )
         assert issued.status_code == 201
-        replayed = await client.post("/api/certificates/pins/issue", json=request, headers=headers)
+        replayed = await client.post(
+            "/api/certificates/pins/issue", json=request, headers=headers
+        )
         assert replayed.status_code == 200
         assert replayed.json()["replayed"] is True
         assert replayed.json()["pin"] == issued.json()["pin"]
