@@ -61,7 +61,7 @@ services:
       CA_ISSUING_CERT_PATH: ""
       LEO4PROXY_ENDPOINTS: ${LEO4PROXY_ENDPOINTS:-}
       LEO4PROXY_ENDPOINTS_TTL_SECONDS: ${LEO4PROXY_ENDPOINTS_TTL_SECONDS:-86400}
-    image: dev-leo4-ru.cr.cloud.ru/etran/processingbackend@sha256:2b58d28d6bdc251df0c547cecd340db5ae1111d5047b127bafc31971ea0c726d
+    image: dev-leo4-ru.cr.cloud.ru/etran/processingbackend@sha256:de04a93dabb5d927a64da432b8e0f820f63b1839fad9d42530181c8ff8efbf87
     container_name: processing-backend
     restart: always
     env_file:

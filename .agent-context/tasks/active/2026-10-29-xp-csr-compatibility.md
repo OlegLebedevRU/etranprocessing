@@ -1,4 +1,4 @@
-# XP XEnroll CSR compatibility — source only
+# XP XEnroll CSR compatibility — deployed
 
 Owner requested a separate unsigned XP x86 l4pin using legacy CSP/XEnroll while
 preserving modern SN and certificate fields. No XP host is available by agreement.
@@ -24,7 +24,21 @@ RSA2048 success and RSA1024 refusal. Ruff check/format and affected application
 Pyright passed. Whole test-file Pyright has two existing Settings(_env_file)
 errors; no claim of a clean whole-repository typecheck. Tests use isolated keys.
 
-No production deployment, live PIN use or live certificate installation occurred.
+Initial local validation used no production deployment, live PIN or certificate installation.
 Deploy PB changes before expecting the new client SHA1 CSR flow to work against
 cryptography50. XP TLS/SHA256 validation still needs operator acceptance; no
 certificate-verification bypass or HTTP downgrade is provided in the client.
+
+## Deployment acceptance, 2026-10-29
+
+PR142 merged as 1a61711de239df759ad6e0a595787e91153b7285. Builder passed
+356 tests (2 skipped), Ruff and Pyright. Registry digest:
+sha256:de04a93dabb5d927a64da432b8e0f820f63b1839fad9d42530181c8ff8efbf87.
+Standard deployer preserved the existing PB overlay and image rollback; health200,
+revision/digest and live valid/invalid RSA2048/SHA1 CSR verifier probes passed.
+No real PIN or CA issuance was exercised. PB environment/mount hashes retained;
+13 neighboring container IDs/images/environments unchanged. Base Compose and
+persistent image override pinned to the new digest. RSA1024 remains refused.
+XP client default now prompts for PIN on double click and waits before closing.
+Legacy cleanup audit: E-matched personal certificates removed by legacy from
+both CurrentUser and LocalMachine; the new client currently preserves them.
