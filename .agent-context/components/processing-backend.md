@@ -1,6 +1,6 @@
 # ProcessingBackend
 
-## XP CSR compatibility, 2026-10-29 — source only, not deployed
+## XP CSR compatibility, 2026-10-29 — deployed
 
 Legacy no-v provider remains CSP; modern v26 remains CNG. Explicit RSA/SHA1 CSR
 verification restores XEnroll proof of possession under cryptography50, while
