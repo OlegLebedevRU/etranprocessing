@@ -1,5 +1,12 @@
 # ProcessingBackend
 
+## XP CSR compatibility, 2026-10-29 — source only, not deployed
+
+Legacy no-v provider remains CSP; modern v26 remains CNG. Explicit RSA/SHA1 CSR
+verification restores XEnroll proof of possession under cryptography50, while
+issued certificates stay SHA256 and RSA>=2048. 76 focused tests passed; no live
+enrollment. [Handoff](../tasks/active/2026-10-29-xp-csr-compatibility.md).
+
 ## Camera credential recipient, 2026-10-23 — source only, not deployed
 
 PB owns additive034 and verified public Terminal.credential_recipient_pem collection.
