@@ -63,3 +63,15 @@
 - IoT GHCR build workflow disabled in GitHub before pushing; its source was already
   manual-only. etranprocessing automatic workflow remains disabled.
 - Production and builder rollout: pending; local results alone are not deploy proof.
+
+## Builder publication follow-up
+
+- Builder installer upgraded uv0.13.7 and managed Python3.14.10 successfully.
+  PB, MB and MCP Linux gates and immutable image publication completed from7737011.
+- IoT Linux suite/build/push completed, but final imagetools verification failed:
+  an earlier root metadata query using the runner Docker config had replaced only
+  .docker/buildx/current with root:0600. Parent, lock and activity remain runner-owned.
+  This was introduced by the investigation, not by application dependencies.
+- Repair is delivered via the approved installer: validate that exact selector is
+  a regular non-symlink file, restore runner ownership, then retry the standard
+  registry publication path. No recursive ownership change or Docker auth edits.
