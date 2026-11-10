@@ -160,7 +160,7 @@ async def _find_terminal_by_pin(
     for_update: bool = False,
     purpose: str = "setup",
     include_used: bool = False,
-) -> Row[tuple[Terminal, CertificatePin]] | None:
+) -> Row[Terminal, CertificatePin] | None:
     """Look up terminal via certificate_pins table. Returns (terminal, pin_row) or None.
 
     Lazily expires a `pending` PIN whose TTL has passed (marks it `expired` and

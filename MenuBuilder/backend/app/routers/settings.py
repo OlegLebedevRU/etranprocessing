@@ -664,7 +664,7 @@ async def confirm_email_token(
 # --- Endpoints: Terminals ---
 
 
-def _visible_terminals_query(org_id: int) -> Select[tuple[Terminal]]:
+def _visible_terminals_query(org_id: int) -> Select[Terminal]:
     deleted = (
         select(L4DeskTerminal.terminal_id)
         .where(
