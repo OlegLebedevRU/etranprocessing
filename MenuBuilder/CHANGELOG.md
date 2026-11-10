@@ -1,5 +1,13 @@
 # Changelog — MenuBuilder
 
+## Unreleased — payment reports
+
+### Added
+
+- Payment type filter: all by default, card, or cash (including legacy type0).
+- CSV exports include every parameter from the displayed payment rows in distinct
+  columns by code and description, preserving empty and repeated values.
+
 ## Unreleased — camera admission errors
 
 ### Fixed

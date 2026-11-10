@@ -1,5 +1,16 @@
 # Changelog — ProcessingBackend
 
+## Unreleased — payment parameter encoding
+
+### Fixed
+
+- Decode percent-encoded terminal payment fields as UTF-8 or Windows-1251 without
+  replacing valid Cyrillic with replacement characters. Split form delimiters
+  before decoding to preserve literal ampersands, equals and plus signs in values.
+- Parameter values containing equals signs retain the first field separator.
+- Previously persisted replacement characters require original source data for
+  restoration; this change does not rewrite historical payments.
+
 ## Unreleased — FM v2 only
 
 FM admission requires protocol v2 and MQTT navigation/user-write/drive capabilities; PB listing operations/results removed.
