@@ -180,7 +180,7 @@ Start/renew/stop/cancel FM — MQTT через IoT, HTTPS агента — PB, f
 1. **`MenuBuilder/backend`**:
    - Логи WebSocket прокси и запросов аренды:
      ```bash
-     sudo docker logs --tail=100 -f menubuilder-backend
+     sudo /usr/local/sbin/docker-logs-safe menubuilder-backend 100
      ```
    - Проверьте наличие `WebSocket session finished ... reason=...`.
 

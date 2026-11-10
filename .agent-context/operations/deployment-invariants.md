@@ -59,6 +59,8 @@ MCP state changes с confirmationId подтверждаются явно; secre
 После релиза проверить endpoint/контракт, revision/container и соответствующий workload.
 
 ## Ключевые исходники
+- [Docker log safety](../../docs/ops_run-docker-log-safety.md) — серверный timeout
+  чтения и json-file20m/3; действующим контейнерам требуется адресное пересоздание.
 - [compose.yaml](../../compose.yaml) — локальная orchestration reference.
 - [Alembic](../../ProcessingBackend/backend/alembic/versions) — общие миграции.
 - [release handoff](../tasks/release-handoff-template.md) — evidence/compatibility/rollback gates.

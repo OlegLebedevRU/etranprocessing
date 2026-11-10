@@ -1,0 +1,20 @@
+#!/bin/sh
+# Run on the Docker host, including when invoked over SSH. Exit 124 means timeout.
+set -eu
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+    echo "Usage: docker-logs-safe CONTAINER [LINES:1..2000]" >&2
+    exit 2
+fi
+case "$1" in
+    ''|[!a-zA-Z0-9]*|*[!a-zA-Z0-9_.-]*) echo "Invalid container name" >&2; exit 2 ;;
+esac
+lines=${2:-200}
+case "$lines" in
+    ''|*[!0-9]*|?????*) echo "Invalid line limit" >&2; exit 2 ;;
+esac
+if [ "$lines" -lt 1 ] || [ "$lines" -gt 2000 ]; then
+    echo "Line limit must be 1..2000" >&2
+    exit 2
+fi
+exec timeout --signal=TERM --kill-after=2s 15s \
+    docker logs --since 10m --tail "$lines" "$1"

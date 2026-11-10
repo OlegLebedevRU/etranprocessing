@@ -1,5 +1,7 @@
 # DevOps Runbook
 
+Docker log reads and rotation: [bounded diagnostics runbook](ops_run-docker-log-safety.md).
+
 ## Legacy IIS server deployment (Payment / TechGate / GateGauge / licensebilling / Certificates)
 
 These are separate ASP.NET Web Applications running on the legacy IIS
@@ -160,7 +162,7 @@ ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34
 
 # Docker containers
 sudo docker compose -f /home/user1/compose.yaml ps
-sudo docker logs <container> --tail 50
+sudo /usr/local/sbin/docker-logs-safe <container> 50
 sudo docker exec -it <container> bash
 ```
 
@@ -362,11 +364,11 @@ sudo docker compose -f /home/user1/nginx-mutual-legacy/docker-compose.yml ps
 
 ```bash
 # Container logs
-sudo docker logs processing-backend --tail 100
-sudo docker logs processing-backend -f  # Follow
+sudo /usr/local/sbin/docker-logs-safe processing-backend 100
+sudo /usr/local/sbin/docker-logs-safe processing-backend 200  # bounded snapshot
 
 # Terminal mTLS gateway logs
-sudo docker logs nginx-mutual-legacy-nginx-mutual-1 --tail 100
+sudo /usr/local/sbin/docker-logs-safe nginx-mutual-legacy-nginx-mutual-1 100
 ```
 
 ### Check Database
@@ -394,7 +396,7 @@ psql -h 10.0.0.7 -U etran_db_user -d etran -c "SELECT COUNT(*) FROM terminals;"
 
 ```bash
 # Check logs
-sudo docker logs processing-backend --tail 50
+sudo /usr/local/sbin/docker-logs-safe processing-backend 50
 
 # Common issues:
 # - .env file missing in /home/user1/ProcessingBackend/backend/.env
@@ -412,14 +414,14 @@ sudo docker exec nginx-mutual-legacy-nginx-mutual-1 cat /etc/nginx/conf.d/intern
 psql -h 10.0.0.7 -U etran_db_user -d etran -c "SELECT * FROM terminals WHERE sn = 'CN_FROM_LOG';"
 
 # 3. Check cert headers in logs
-sudo docker logs processing-backend | grep "Cert DN"
+sudo /usr/local/sbin/docker-logs-safe processing-backend 2000 | grep "Cert DN"
 ```
 
 ### Payment Returns 500
 
 ```bash
 # Check error logs
-sudo docker logs processing-backend --tail 50
+sudo /usr/local/sbin/docker-logs-safe processing-backend 50
 
 # Common issues:
 # - TSP not found in tsp table

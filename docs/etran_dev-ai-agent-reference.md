@@ -125,7 +125,7 @@ terminals ←── payments → orgs
 ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker compose -f /home/user1/compose.yaml up -d --build processing-backend"
 
 # Check logs
-ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker logs processing-backend --tail 50"
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo /usr/local/sbin/docker-logs-safe processing-backend 50"
 ```
 
 ## Testing

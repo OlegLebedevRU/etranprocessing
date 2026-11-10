@@ -1,5 +1,12 @@
+x-etran-logging: &etran-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
 services:
   rabbitmq:
+    logging: *etran-logging
     image: rabbitmq:4-management
     container_name: rabbitmq
     restart: unless-stopped
@@ -26,6 +33,7 @@ services:
       retries: 5
 
   nginx:
+    logging: *etran-logging
     build:
       context: ./MenuBuilder
       dockerfile: nginx/Dockerfile
@@ -54,6 +62,7 @@ services:
       - ./iot-rpc-rest-app/crt/key_0000.pem:/crt/server_key.pem:ro
 
   processing-backend:
+    logging: *etran-logging
     environment:
       CA_SIGNER_BACKEND: local
       CA_ISSUING_KEY_PATH: /run/secrets/terminal-ca/issuer.key.pem
@@ -71,6 +80,7 @@ services:
       - ./ProcessingBackend/issuer-secrets:/run/secrets/terminal-ca:ro
 
   l4mcp:
+    logging: *etran-logging
     image: dev-leo4-ru.cr.cloud.ru/etran/l4mcp@sha256:7dcc28d19286d8ce99aedbdd4ccd2c4492ab0f7d7163416e9d9f947813069f4e
     container_name: l4mcp
     restart: unless-stopped
@@ -81,6 +91,7 @@ services:
       MENUBUILDER_API_URL: ${L4MCP_MENUBUILDER_API_URL:-}
 
   menubuilder-backend:
+    logging: *etran-logging
     image: dev-leo4-ru.cr.cloud.ru/etran/menubuilder-backend@sha256:477f4be2d7acd2f361948254ca59596997b9456212388c53612ee93364c2ee07
     container_name: menubuilder-backend
     restart: always
@@ -91,6 +102,7 @@ services:
       L4MCP_URL: ${L4MCP_URL:-}
 
   app1:
+    logging: *etran-logging
     image: dev-leo4-ru.cr.cloud.ru/etran/app1@sha256:3819d1e983ad7db1cc2dc2d2d0effcf78cadf73ae19ce9f88f2830889caaec57
     container_name: app1
     restart: always
@@ -100,6 +112,7 @@ services:
       - ./iot-rpc-rest-app/logs:/var/log/app
 
   redis:
+    logging: *etran-logging
     image: redis:7.4-alpine
     container_name: iot-redis
     restart: unless-stopped
