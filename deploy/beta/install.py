@@ -104,6 +104,12 @@ def main():
         tools[HOME / ".local/bin/uv"] = member.read()
     for path, data in tools.items():
         install_tool(path, data, account.pw_uid, account.pw_gid, upgrade=args.upgrade_tools)
+    # Root image-inspection commands can leave this user-scoped selector root-owned.
+    current = HOME / ".docker/buildx/current"
+    if current.exists():
+        if current.is_symlink() or not current.is_file():
+            raise RuntimeError("Unexpected Buildx selector path")
+        os.chown(current, account.pw_uid, account.pw_gid)
     subprocess.run(
         [
             "sudo",
