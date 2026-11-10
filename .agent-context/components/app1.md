@@ -1,5 +1,17 @@
 # app1 / iot-rpc-rest-app: внешняя граница
 
+## Camera4623 runtime recovery — deployed2026-11-10
+
+IoT master179872f deployed to app1/camera-runtime: dedicated bounded DB pool,
+driver deadlines, independent watchdog/backoff and pending same-boot hello
+coalescing. Managed proxy rejects startup statement_timeout; final code omits
+that parameter. Production samples showed queue0 and advancing owner/last_tick.
+Local1215tests, builder1189tests and disposable-PG recovery passed. This does not
+establish live playback: later RPC160 returned auth_failed; the user chose local
+camera recovery and stopped further work. Preserve physical binding/lease fences.
+[Incident and release evidence](../tasks/active/2026-11-10-camera-4623-triage.md),
+[logging rollout and authentication follow-up](../tasks/active/2026-11-10-docker-log-safety.md).
+
 ## Назначение
 Оркестратор remote-input lease, MQTT/RPC и событий согласно локальной архитектуре.
 

@@ -89,3 +89,5 @@
   support; asked user whether working access is known, without requesting a password
   in chat. No password guessing, power/binding changes or stream START performed.
 - Live camera playback remains unresolved and is not claimed as deployment success.
+- User subsequently chose local recovery and stopped further camera work. Logging
+  deployment remains complete; no additional terminal recovery actions authorized.
