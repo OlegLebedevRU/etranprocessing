@@ -1,7 +1,14 @@
+x-etran-logging: &etran-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
 name: l4desk-e2e
 
 services:
   mock-gateway:
+    logging: *etran-logging
     build:
       context: .
       dockerfile: Dockerfile
@@ -22,6 +29,7 @@ services:
       - e2e_private
 
   test-backend:
+    logging: *etran-logging
     image: ${E2E_BACKEND_IMAGE:-l4desk-e2e-test-backend}
     build:
       context: ../..

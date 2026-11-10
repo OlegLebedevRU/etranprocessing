@@ -352,7 +352,7 @@ production server.
 
 ```bash
 # Read-only checks on production (87.242.100.34)
-sudo docker logs processing-backend --tail 50
+sudo /usr/local/sbin/docker-logs-safe processing-backend 50
 sudo docker exec processing-backend cat /app/log/payment.log
 ```
 
@@ -440,6 +440,6 @@ D:\repo\platerra\Public\PROCESSING\BACK\ProcessingCore\
 
 ### Container restarts
 
-- Check logs: `sudo docker logs processing-backend --tail 50`
+- Check logs: `sudo /usr/local/sbin/docker-logs-safe processing-backend 50`
 - Verify `.env` file exists and has correct DATABASE_URL
 - Check PostgreSQL is accessible from container network

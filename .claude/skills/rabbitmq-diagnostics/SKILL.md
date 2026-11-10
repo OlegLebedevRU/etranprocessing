@@ -84,7 +84,7 @@ ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker stats --no-stream 
 ### 3.7. Log Analysis & Error Diagnostics
 Inspect recent logs for errors, connection drops, auth refusals, and TLS handshake issues:
 ```powershell
-ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker logs --tail 1000 rabbitmq 2>&1 | grep -o '\[error\].*' | cut -d' ' -f3- | sort | uniq -c | sort -nr | head -n 25"
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo /usr/local/sbin/docker-logs-safe rabbitmq 1000 2>&1 | grep -o '\[error\].*' | cut -d' ' -f3- | sort | uniq -c | sort -nr | head -n 25"
 ```
 
 ---

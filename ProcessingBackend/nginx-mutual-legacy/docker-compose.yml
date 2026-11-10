@@ -1,5 +1,12 @@
+x-etran-logging: &etran-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
 services:
   nginx-mutual:
+    logging: *etran-logging
     image: ghcr.io/oleglebedevru/iot-rpc-rest-app/nginx-mutual:sha-f78556a
     ports:
       - "443:443"

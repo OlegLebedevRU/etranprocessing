@@ -1,7 +1,14 @@
+x-etran-logging: &etran-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
 name: l4media
 
 services:
   nginx:
+    logging: *etran-logging
     image: dev-leo4-ru.cr.cloud.ru/etran/l4media-nginx@sha256:039760bddf1a0ce6e663c7f5c959c6a8a9345852b7398e8f590b6e0783e1880d
     container_name: l4media-nginx
     restart: unless-stopped
@@ -21,6 +28,7 @@ services:
       - ingress
 
   ingress:
+    logging: *etran-logging
     image: ${L4MEDIA_INGRESS_IMAGE:-dev-leo4-ru.cr.cloud.ru/etran/l4media-ingress@sha256:4ae0ef4e4080abb3ce8fd06f16ac3283d7a731111a5d5e8961f40fb3a370c057}
     container_name: l4media-ingress
     restart: unless-stopped
@@ -47,6 +55,7 @@ services:
       - janus
 
   janus:
+    logging: *etran-logging
     image: ${L4MEDIA_JANUS_IMAGE:-dev-leo4-ru.cr.cloud.ru/l4media-janus@sha256:93265665a92482ec1de2c9571a08d27c87b1dee06efc000f717ed42dfe2438ae}
     container_name: l4media-janus
     restart: unless-stopped
@@ -68,6 +77,7 @@ services:
       - user1_default
 
   archive-worker:
+    logging: *etran-logging
     image: python:3.14-slim
     container_name: l4media-archive-worker
     restart: unless-stopped
