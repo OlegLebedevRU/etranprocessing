@@ -32,6 +32,11 @@ commit и устраните ошибку профиля/транспорта. G
 
 ## Выбор маршрута деплоя
 
+С2026-11-10 автоматический GitHub workflow `HEVC frozen contract` отключён
+в настройках репозитория; в YAML оставлен только `workflow_dispatch`, без `push`
+и `pull_request`. Ручной запуск потребует явного включения workflow в GitHub.
+Релизные образы по-прежнему собираются штатным launcher на выделенном builder.
+
 Для управляемых образов `etranprocessing` при **явно согласованном** маршруте
 используйте [бета-регламент](ops_run-beta-ci-cd.md): Git `main` → builder
 `176.108.247.249` → registry с immutable digest → pull на production

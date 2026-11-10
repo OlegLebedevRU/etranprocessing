@@ -88,6 +88,8 @@
   Need establish correct camera target/working credentials and terminal recovery
   support; asked user whether working access is known, without requesting a password
   in chat. No password guessing, power/binding changes or stream START performed.
-- Live camera playback remains unresolved and is not claimed as deployment success.
+- At the end of the remote investigation camera playback remained unresolved and
+  was not claimed as deployment success. The user later confirmed local recovery
+  and working camera playback; no additional remote E2E was performed.
 - User subsequently chose local recovery and stopped further camera work. Logging
   deployment remains complete; no additional terminal recovery actions authorized.
