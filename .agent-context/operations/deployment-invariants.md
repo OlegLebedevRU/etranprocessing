@@ -59,6 +59,10 @@ MCP state changes с confirmationId подтверждаются явно; secre
 После релиза проверить endpoint/контракт, revision/container и соответствующий workload.
 
 ## Ключевые исходники
+- [Python maintenance](../tasks/active/2026-11-10-python-maintenance.md) — проверенный
+  выпуск Python3.14.10/uv0.13.7. Builder upgrade только через `deploy/beta/install.py`
+  с `--upgrade-tools`; Buildx выполнять от github-runner, чтобы не менять ownership
+  его selector через root-команды с чужим Docker config.
 - [Docker log safety](../../docs/ops_run-docker-log-safety.md) — серверный timeout
   чтения и json-file20m/3; действующим контейнерам требуется адресное пересоздание.
 - [compose.yaml](../../compose.yaml) — локальная orchestration reference.
