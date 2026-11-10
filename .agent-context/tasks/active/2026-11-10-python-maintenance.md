@@ -128,3 +128,9 @@
 - Follow-up pins/documentation do not alter deployed application code or image
   contents and need no additional service restart. No new authenticated browser
   login/payment writes or camera decode E2E claimed. JWT migration remains deferred.
+
+## Operator acceptance
+
+User subsequently confirmed that everything visually works after deployment.
+This is operator confirmation, not an additional automated browser/decode test.
+No further runtime changes were needed. JWT migration remains a separate task.
