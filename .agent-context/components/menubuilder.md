@@ -152,6 +152,14 @@ browser tests passed. Deployed read-only selectors correctly choose773 PIN327
 despite newer unused328. Owner-triggered install/hot rotation/RabbitMQ not yet
 verified. [Delivery and limits](../tasks/active/2026-10-12-renewal-install-recovery.md).
 
+## JWT library migration, 2026-11-10
+
+The JWT domain uses PyJWT (RS256 private signer and backend verification;
+separate HS256 API-token domain). Required issuer claims, fixed algorithms,
+mock gates, keys and tenant/session contracts are preserved. External issuer
+deployment belongs to the user and does not block this migration.
+[Validation and rollout status](../tasks/active/2026-11-10-jwt-migration.md).
+
 ## JWT signer и native CAPTCHA, 2026-10-11 — выпущено
 
 Приватный RS256 signer, public key lk-key-000003, internal HMAC отдельно от

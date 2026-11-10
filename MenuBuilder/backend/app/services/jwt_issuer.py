@@ -14,8 +14,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
+import jwt
 from fastapi import HTTPException, status
-from jose import JWTError, jwt
+from jwt import PyJWTError
 
 from app.config import settings
 
@@ -649,7 +650,7 @@ class JwtIssuerClient:
                 algorithms=["RS256"],
                 audience=self.aud,
                 issuer=self.iss,
-                options={"require_exp": True, "require_iat": True, "require_nbf": True},
+                options={"require": ["exp", "iat", "nbf"]},
             )
             if not ISSUER_V2_ACCESS_MANDATORY_CLAIMS.issubset(claims):
                 raise ValueError("Incomplete issuer claims")
@@ -673,7 +674,7 @@ class JwtIssuerClient:
                 raise ValueError("Issuer privilege mismatch")
             if claims.get("sid") != sid or claims.get("orig_sub") != orig_sub:
                 raise ValueError("Issuer session mismatch")
-        except (JWTError, ValueError, KeyError, TypeError) as exc:
+        except (PyJWTError, ValueError, KeyError, TypeError) as exc:
             raise HTTPException(
                 502, "JWT issuer returned an invalid token pair"
             ) from exc
