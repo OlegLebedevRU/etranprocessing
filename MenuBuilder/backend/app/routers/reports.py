@@ -1,6 +1,7 @@
 import json
 from contextlib import suppress
 from datetime import UTC, datetime, tzinfo
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -868,6 +869,7 @@ async def get_payments_report(
     device_ids: str | None = None,
     tsp_code: int | None = None,
     paym_state: int | None = None,
+    payment_type: Literal["all", "card", "cash"] = "all",
     top: int = Query(100, ge=10, le=1000),
     org_id: int | None = Query(None),
 ):
@@ -903,6 +905,11 @@ async def get_payments_report(
         if paym_state is not None:
             conditions.append("p.paym_state = :paym_state")
             params["paym_state"] = paym_state
+        if payment_type == "cash":
+            conditions.append("p.pay_type_id IN (0, 1)")
+        elif payment_type == "card":
+            conditions.append("p.pay_type_id = :pay_type_id")
+            params["pay_type_id"] = 2
         where = " AND ".join(conditions)
         count_row = (
             await session.execute(

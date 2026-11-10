@@ -44,6 +44,7 @@ import {
   type RecalculatePreviewResponse,
 } from "../api/reports";
 import { getServices } from "../api/services";
+import { paymentExport, reportCsv } from "../utils/paymentExport";
 import { getMe } from "../api/auth";
 import { useSession } from "../session/SessionContext";
 import {
@@ -170,24 +171,7 @@ export default function ReportsPage() {
     headers: string[],
     rows: (string | number)[][]
   ) => {
-    const escapeCell = (val: string | number) => {
-      const str = String(val ?? "");
-      if (
-        str.includes(";") ||
-        str.includes('"') ||
-        str.includes("\n") ||
-        str.includes("\r")
-      ) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
-    const csvContent =
-      "\uFEFF" +
-      [
-        headers.map(escapeCell).join(";"),
-        ...rows.map((r) => r.map(escapeCell).join(";")),
-      ].join("\r\n");
+    const csvContent = reportCsv(headers, rows);
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -228,28 +212,7 @@ export default function ReportsPage() {
       ]);
       downloadCsv("inkass_report", headers, rows);
     } else if (activeReport === "payments") {
-      const headers = [
-        "Транзакция",
-        "Терминал",
-        "Серийный номер",
-        "Код ТСП",
-        "ТСП",
-        "Сумма (руб)",
-        "Время",
-        "Статус",
-        "Тип",
-      ];
-      const rows = payItems.map((r) => [
-        r.paym_ext_id,
-        r.device_id,
-        r.sn || "",
-        r.paym_tsp_code || "",
-        r.tsp_name || "",
-        r.paym_amount ? (r.paym_amount / 100).toFixed(2) : "0.00",
-        formatTenantDateTime(r.paym_datetime, tenantTz),
-        r.paym_state_label,
-        r.pay_type_label,
-      ]);
+      const { headers, rows } = paymentExport(payItems, value => formatTenantDateTime(value, tenantTz));
       downloadCsv("payments_report", headers, rows);
     } else if (activeReport === "balance-terminal") {
       const headers = [
@@ -356,6 +319,7 @@ export default function ReportsPage() {
   const [payDeviceIds, setPayDeviceIds] = useState<number[]>([]);
   const [payTspCode, setPayTspCode] = useState<number | undefined>();
   const [payTop, setPayTop] = useState(50);
+  const [payType, setPayType] = useState<"all" | "card" | "cash">("all");
 
   // --- Balance by terminal state ---
   const defaultBtDateTo = todayStr;
@@ -437,6 +401,7 @@ export default function ReportsPage() {
         date_to: payDateTo || todayStr,
         device_ids: payDeviceIds.length ? payDeviceIds : undefined,
         tsp_code: payTspCode,
+        payment_type: payType,
         top: payTop,
       });
       setPayItems(resp.items);
@@ -444,7 +409,7 @@ export default function ReportsPage() {
     } finally {
       setPayLoading(false);
     }
-  }, [payDateFrom, payDateTo, payDeviceIds, payTspCode, payTop, todayStr]);
+  }, [payDateFrom, payDateTo, payDeviceIds, payTspCode, payType, payTop, todayStr]);
 
   useEffect(() => {
     if (tenantReady && activeReport === "payments") fetchPayments();
@@ -1312,6 +1277,18 @@ export default function ReportsPage() {
                     >
                       {!isXs && "Найти"}
                     </Button>
+                    <Select
+                      aria-label="Тип платежа"
+                      size="small"
+                      style={{ width: 145 }}
+                      value={payType}
+                      onChange={setPayType}
+                      options={[
+                        { value: "all", label: "Все типы" },
+                        { value: "card", label: "Карта" },
+                        { value: "cash", label: "Наличные" },
+                      ]}
+                    />
                     <Input
                       placeholder="TSP"
                       size="small"

@@ -1,5 +1,12 @@
 # MenuBuilder
 
+## Payment report parameters — local implementation2026-11-10
+
+Optional all/card/cash filter, dynamic CSV parameter columns and PB UTF-8/CP1251
+form decoding fix. Existing org475 example has persisted replacement characters
+and needs original source data for historical repair. No migration or production
+data change. [Validation and release order](../tasks/active/2026-11-10-payment-report-details.md).
+
 ## Desktop compatibility — deployed, 2026-10-26
 
 Application main3b59799 deployed with accepted helpera449ec0; BFF ports5004/5005

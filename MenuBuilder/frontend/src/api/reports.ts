@@ -147,6 +147,7 @@ export async function getPayments(params: {
   device_ids?: number[];
   tsp_code?: number;
   paym_state?: number;
+  payment_type?: "all" | "card" | "cash";
   top?: number;
 }): Promise<PaymentsResponse> {
   const { data } = await axios.get("/reports/payments", {

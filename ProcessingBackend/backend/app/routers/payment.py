@@ -203,15 +203,27 @@ async def _handle_update(
 
 def _parse_request_params(request: Request, body: bytes) -> dict:
     """Extract params from query string and/or POST body."""
-    from urllib.parse import unquote_plus
+    from urllib.parse import unquote_to_bytes
 
-    params = dict(request.query_params)
-    if body:
-        raw = body.decode("windows-1251", errors="replace")
-        # Decode URL encoding (+ = space, %XX = char)
-        raw = unquote_plus(raw)
-        for param in raw.split("&"):
-            if "=" in param:
-                k, v = param.split("=", 1)
-                params[k] = v
+    def decode(value: bytes, encoding: str) -> str:
+        raw = unquote_to_bytes(value.replace(b"+", b" "))
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            return raw.decode("windows-1251", errors="replace")
+
+    params = {}
+    charset = request.headers.get("content-type", "").lower().split("charset=", 1)[-1]
+    charset = charset.split(";", 1)[0].strip(" \"'")
+    body_encoding = "windows-1251" if charset in {"windows-1251", "cp1251"} else "utf-8"
+    # Split structural delimiters before decoding %26/%3D inside field values.
+    # Terminals send both UTF-8 and Windows-1251, including percent-encoded bytes.
+    for source, encoding in (
+        (request.scope.get("query_string", b""), "utf-8"),
+        (body, body_encoding),
+    ):
+        for field in source.split(b"&"):
+            key, separator, value = field.partition(b"=")
+            if separator:
+                params[decode(key, encoding)] = decode(value, encoding)
     return params

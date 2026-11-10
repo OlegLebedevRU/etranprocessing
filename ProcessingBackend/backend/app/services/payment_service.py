@@ -376,9 +376,14 @@ def parse_params_string(params_str: str | None) -> dict[int, str]:
             continue
 
         # Find separator (space or =)
-        sep_idx = param.find("=")
-        if sep_idx < 0:
-            sep_idx = param.find(" ")
+        sep_idx = min(
+            (
+                position
+                for position in (param.find("="), param.find(" "))
+                if position >= 0
+            ),
+            default=-1,
+        )
 
         if sep_idx > 0:
             key = param[:sep_idx].strip()
