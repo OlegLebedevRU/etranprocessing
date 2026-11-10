@@ -1,5 +1,7 @@
 /** Stable admission reasons; never expose provider payloads or credentials. */
 const videoErrors: Record<string, string> = {
+  camera_inbox_busy: "Сервис камеры временно не успевает обрабатывать запросы. Повторите попытку позже.",
+  camera_main_app_or_gauge_not_fresh: "Сведения о камере устарели. Дождитесь обновления состояния устройства.",
   transport_not_configured: "На сервере не настроены порты видеотранспорта. Обратитесь к администратору.",
   disabled_by_policy: "Новый режим видео выключен на сервере. Для совместимого просмотра выберите H.264.",
   negotiation_unavailable: "Сервер не подтвердил готовность нового режима видео. Проверьте его настройки или выберите H.264.",
@@ -22,4 +24,9 @@ const videoErrors: Record<string, string> = {
 
 export function videoErrorMessage(code?: string): string | undefined {
   return code && Object.prototype.hasOwnProperty.call(videoErrors, code) ? videoErrors[code] : undefined;
+}
+
+export function isVideoSessionConflict(raw: string): boolean {
+  return raw === "camera_busy_stream" || raw === "session_busy" || raw === "lease_taken" ||
+    (!raw.startsWith("camera_") && (raw.includes("lease_taken") || raw.includes("session_busy") || raw.includes("busy")));
 }

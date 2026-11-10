@@ -1,5 +1,12 @@
 # Changelog — MenuBuilder
 
+## Unreleased — camera admission errors
+
+### Fixed
+
+- Camera queue saturation and stale telemetry no longer appear as another
+  operator's active session. Actual stream/lease conflicts retain their warning.
+
 ## Unreleased — desktop streaming compatibility
 
 ### Fixed

@@ -57,7 +57,7 @@ import { getCamera } from "../api/cameras";
 import { CameraAttempt } from "../utils/cameraAttempt";
 import { admitCamera } from "../utils/cameraAdmission";
 import { browserVideoCodecs } from "../utils/browserVideoCodecs";
-import { videoErrorMessage } from "../utils/videoErrors";
+import { isVideoSessionConflict, videoErrorMessage } from "../utils/videoErrors";
 
 const { Text } = Typography;
 
@@ -103,10 +103,7 @@ function formatVideoError(err: any): { title: string; message: string; code: str
     };
   }
   if (
-    status === 409 ||
-    raw.includes("lease_taken") ||
-    raw.includes("busy") ||
-    raw.includes("session_busy")
+    isVideoSessionConflict(raw)
   ) {
     return {
       title: "Терминал занят",
@@ -114,6 +111,13 @@ function formatVideoError(err: any): { title: string; message: string; code: str
         raw ||
         "Терминал уже находится под управлением другого пользователя или занят другой сессией.",
       code: "session_busy",
+    };
+  }
+  if (raw.startsWith("camera_")) {
+    return {
+      title: "Камера пока не готова",
+      message: videoErrorMessage(raw) || cameraErrors[raw] || "Не удалось подтвердить готовность камеры. Обновите её состояние перед повторным запуском.",
+      code: raw,
     };
   }
   if (raw.includes("offline") || raw.includes("Device is offline")) {

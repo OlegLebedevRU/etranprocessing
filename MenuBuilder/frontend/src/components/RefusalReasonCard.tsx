@@ -45,7 +45,8 @@ export function classifyRefusalReason(code?: string, rawMessage?: string): Refus
   if (
     c === "session_busy" ||
     c === "conflict" ||
-    c.includes("busy") ||
+    c === "camera_busy_stream" ||
+    (!c.startsWith("camera_") && c.includes("busy")) ||
     c.includes("lease_taken") ||
     m.includes("занят активной сессией") ||
     m.includes("session_busy") ||
