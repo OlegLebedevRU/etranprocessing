@@ -158,6 +158,9 @@ The JWT domain uses PyJWT (RS256 private signer and backend verification;
 separate HS256 API-token domain). Required issuer claims, fixed algorithms,
 mock gates, keys and tenant/session contracts are preserved. External issuer
 deployment belongs to the user and does not block this migration.
+Released main4731180: backend/signer PyJWT2.15.1, health200, strict invalid-token401;
+Windows and Linux suites1229passed/25skipped, locked audit clean. Keys and sessions
+unchanged; real user login/refresh after release remains operator acceptance.
 [Validation and rollout status](../tasks/active/2026-11-10-jwt-migration.md).
 
 ## JWT signer и native CAPTCHA, 2026-10-11 — выпущено
