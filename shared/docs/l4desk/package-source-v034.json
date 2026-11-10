@@ -25,7 +25,7 @@
     "etranprocessing_db/models/telemetry.py": "dd20ccd8862cd0b36a11a03d2312595c29861856073620f6c02d6759b8cbb388",
     "etranprocessing_db/models/terminal.py": "abe408917cb7079b1b1807095d8c9d81ded8e0b673cdd16dfc88c8c125e0fd14",
     "pyproject.toml": "58e197360b126289e47e9dc1c38954a15cbc54d4b00b5745bee5d4ae9695c686",
-    "uv.lock": "fd69b07afee90d75e99a4adcdd99309e6a9726e66af5ff38b4380551f48899c0",
+    "uv.lock": "2f85327505d78296eb17c67812907a1541fc3c83151285b9449fee321d3df7e8",
     "docs/l4desk/schema-v034.json": "12552c71de6d766c8aa32e3e23373817d794548c58e66d6a94a250bbac65e64c",
     "docs/l4desk/schema-v034.md": "e89fe6a1343eb01f66a79ec803ff5bb1b321d0d845af2dbdfb2df0d656bce5e4"
   }
