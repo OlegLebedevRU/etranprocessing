@@ -21,7 +21,7 @@ configurations and refuses changes outside logging. Existing custom logging
 policies require review. Backups and candidates are created privately because
 Compose files may contain environment settings. Re-running is idempotent.
 
-Policy: JSON-file, max-size20m, max-file3 (approximately60MiB per container).
+Policy: JSON-file, max-size20m, max-file3 (approximately60MB per container).
 This is finite history, not an archival guarantee. See the
 [Docker logging reference](https://docs.docker.com/engine/logging/drivers/json-file/).
 
@@ -44,6 +44,14 @@ Existing containers require recreation to acquire log options. For each target:
 Do not recreate optional E2E fixtures by inventing missing environment settings.
 Leave excluded containers explicit in the release evidence. Never manipulate
 Docker's JSON files to implement rotation.
+
+Services defined only in an additional override (such as camera-runtime) also
+need a logging entry in that service's override chain. Generate it from the same
+installer LOGGING policy and keep the file for later releases. A shared env file
+may have drifted since an old container started: preserve its effective environment
+through a private override rather than enabling unrelated settings during rotation.
+Compare environment mappings and mount sets; Docker may reorder these arrays or
+represent explicitly unset variables as bare names without an equals sign.
 
 Rollback: restore the private `*.pre-logging-*` Compose backup, preserve the same
 complete override chain and image, recreate only the affected service, and verify
