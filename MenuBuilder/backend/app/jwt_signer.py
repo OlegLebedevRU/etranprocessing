@@ -10,10 +10,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
+import jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import FastAPI, HTTPException, Request
-from jose import jwt
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

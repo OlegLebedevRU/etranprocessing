@@ -4,9 +4,9 @@ from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import jwt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import jwt
 from sqlalchemy import select
 
 from app.config import settings
@@ -182,7 +182,7 @@ def decode_token(token: str) -> dict[str, Any]:
         except Exception:  # noqa: S110, BLE001
             pass
         try:
-            return jwt.get_unverified_claims(token)
+            return jwt.decode(token, options={"verify_signature": False})
         except Exception:  # noqa: S110, BLE001
             pass
 

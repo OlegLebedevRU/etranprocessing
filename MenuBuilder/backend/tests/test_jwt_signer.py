@@ -7,12 +7,12 @@ import time
 from unittest.mock import patch
 
 import httpx
+import jwt
 import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from jose import jwt
 
 from app.auth import decode_token
 from app.config import settings
@@ -114,6 +114,131 @@ def test_real_signature_and_menu_contract(signer, signer_material, monkeypatch):
     monkeypatch.setattr(settings, "jwt_public_key", signer_material[1])
     monkeypatch.setattr(settings, "jwt_issuer_mock_enabled", False)
     assert decode_token(result["accessToken"])["orgId"] == 42
+
+
+def test_rs256_wire_compatibility_without_jwt_codec(
+    signer, signer_material, monkeypatch
+):
+    """A separate issuer needs the same wire contract, not the same JWT library."""
+    token = signer.issue(signed_params())["accessToken"]
+    header, payload, signature = token.split(".")
+    public = serialization.load_pem_public_key(signer_material[1].encode())
+    assert isinstance(public, rsa.RSAPublicKey)
+    public.verify(
+        base64.urlsafe_b64decode(signature + "=="),
+        f"{header}.{payload}".encode(),
+        padding.PKCS1v15(),
+        hashes.SHA256(),
+    )
+    # Build an independent RS256 token with the previous issuer's compact JSON format.
+    claims = json.loads(base64.urlsafe_b64decode(payload + "=="))
+    claims["jti"] = "independent-issuer"
+    payload = (
+        base64.urlsafe_b64encode(json.dumps(claims, separators=(",", ":")).encode())
+        .rstrip(b"=")
+        .decode()
+    )
+    signing_input = f"{header}.{payload}".encode()
+    private = serialization.load_pem_private_key(signer_material[0].read_bytes(), None)
+    assert isinstance(private, rsa.RSAPrivateKey)
+    signature = (
+        base64.urlsafe_b64encode(
+            private.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
+        )
+        .rstrip(b"=")
+        .decode()
+    )
+    monkeypatch.setattr(settings, "jwt_public_key", signer_material[1])
+    monkeypatch.setattr(settings, "jwt_issuer_mock_enabled", False)
+    monkeypatch.setattr(settings, "jwt_verify_audience", True)
+    assert (
+        decode_token(f"{header}.{payload}.{signature}")["jti"] == "independent-issuer"
+    )
+
+
+@pytest.mark.parametrize("field", ["exp", "iat", "nbf", "jti", "orgId", "sub"])
+def test_issuer_response_requires_claims(signer, signer_material, monkeypatch, field):
+    pair = signer.issue(signed_params())
+    claims = jwt.decode(pair["accessToken"], options={"verify_signature": False})
+    del claims[field]
+    pair["accessToken"] = jwt.encode(
+        claims, signer_material[0].read_bytes(), algorithm="RS256"
+    )
+    monkeypatch.setattr(settings, "jwt_public_key", signer_material[1])
+    with pytest.raises(HTTPException) as exc:
+        JwtIssuerClient(mock_enabled=False)._validate_issued_tokens(
+            pair,
+            user_id=123,
+            org_id=42,
+            role_id=2,
+            is_superuser=False,
+            sid=None,
+            orig_sub=None,
+        )
+    assert exc.value.status_code == 502
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"exp": 1},
+        {"nbf": 4102444800},
+        {"iat": 4102444800},
+        {"aud": "wrong"},
+        {"iss": "wrong"},
+        {"sub": 123},
+        {"jti": 123},
+    ],
+)
+def test_production_decode_rejects_invalid_claims(
+    signer, signer_material, monkeypatch, changes
+):
+    claims = jwt.decode(
+        signer.issue(signed_params())["accessToken"],
+        options={"verify_signature": False},
+    )
+    claims.update(changes)
+    token = jwt.encode(claims, signer_material[0].read_bytes(), algorithm="RS256")
+    monkeypatch.setattr(settings, "jwt_public_key", signer_material[1])
+    monkeypatch.setattr(settings, "jwt_issuer_mock_enabled", False)
+    monkeypatch.setattr(settings, "jwt_verify_audience", True)
+    with pytest.raises(HTTPException) as exc:
+        decode_token(token)
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.parametrize("algorithm", ["none", "HS256"])
+def test_production_decode_rejects_algorithm_substitution(
+    signer_material, monkeypatch, algorithm
+):
+    # DER bytes must never become an HMAC key for a token claiming to be an access JWT.
+    key = (
+        None
+        if algorithm == "none"
+        else serialization.load_pem_public_key(
+            signer_material[1].encode()
+        ).public_bytes(
+            serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+    )
+    header = base64.urlsafe_b64encode(
+        json.dumps({"alg": algorithm, "typ": "JWT"}).encode()
+    ).rstrip(b"=")
+    payload = base64.urlsafe_b64encode(
+        json.dumps({"sub": "123", "exp": int(time.time()) + 60}).encode()
+    ).rstrip(b"=")
+    signing_input = header + b"." + payload
+    signature = (
+        base64.urlsafe_b64encode(hmac.digest(key, signing_input, "sha256")).rstrip(b"=")
+        if key is not None
+        else b""
+    )
+    token = (signing_input + b"." + signature).decode()
+    monkeypatch.setattr(settings, "jwt_public_key", signer_material[1])
+    monkeypatch.setattr(settings, "jwt_issuer_mock_enabled", False)
+    with pytest.raises(HTTPException) as exc:
+        decode_token(token)
+    assert exc.value.status_code == 401
 
 
 def test_retries_are_idempotent_and_changed_nonce_body_is_rejected(signer):
@@ -294,8 +419,14 @@ async def test_distinct_sessions_do_not_share_issuance(
             client.issue_tokens(user_id=123, org_id=42, role_id=2, sid=2),
         )
     assert mocked.call_count == 2
-    assert jwt.get_unverified_claims(first["accessToken"])["sid"] == 1
-    assert jwt.get_unverified_claims(second["accessToken"])["sid"] == 2
+    assert (
+        jwt.decode(first["accessToken"], options={"verify_signature": False})["sid"]
+        == 1
+    )
+    assert (
+        jwt.decode(second["accessToken"], options={"verify_signature": False})["sid"]
+        == 2
+    )
 
 
 @pytest.mark.anyio
@@ -345,14 +476,24 @@ async def test_disabled_reserve_stays_unused(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_internal_and_reserve_use_separate_authentication_secrets(signer, signer_material, monkeypatch):
-    monkeypatch.setattr(settings, "jwt_issuer_internal_url", "http://signer.invalid/jwt")
+async def test_internal_and_reserve_use_separate_authentication_secrets(
+    signer, signer_material, monkeypatch
+):
+    monkeypatch.setattr(
+        settings, "jwt_issuer_internal_url", "http://signer.invalid/jwt"
+    )
     monkeypatch.setattr(settings, "jwt_issuer_url", "https://reserve.invalid/jwt")
-    monkeypatch.setattr(settings, "jwt_issuer_internal_secret", "fixture-service-secret")
-    monkeypatch.setattr(settings, "service_to_yc_service_secret", "fixture-reserve-secret")
+    monkeypatch.setattr(
+        settings, "jwt_issuer_internal_secret", "fixture-service-secret"
+    )
+    monkeypatch.setattr(
+        settings, "service_to_yc_service_secret", "fixture-reserve-secret"
+    )
     monkeypatch.setattr(settings, "jwt_issuer_fallback_enabled", True)
     monkeypatch.setattr(settings, "jwt_public_key", signer_material[1])
-    reserve = JwtSigner(signer.config.model_copy(update={"service_secret": "fixture-reserve-secret"}))
+    reserve = JwtSigner(
+        signer.config.model_copy(update={"service_secret": "fixture-reserve-secret"})
+    )
     calls = []
 
     async def post(url, **kwargs):
@@ -364,6 +505,8 @@ async def test_internal_and_reserve_use_separate_authentication_secrets(signer, 
         return httpx.Response(200, json=reserve.issue(params))
 
     with patch("httpx.AsyncClient.post", side_effect=post):
-        result = await JwtIssuerClient(mock_enabled=False).issue_tokens(user_id=123, org_id=42, role_id=2)
+        result = await JwtIssuerClient(mock_enabled=False).issue_tokens(
+            user_id=123, org_id=42, role_id=2
+        )
     assert result["accessToken"]
     assert calls == [settings.jwt_issuer_internal_url] * 2 + [settings.jwt_issuer_url]

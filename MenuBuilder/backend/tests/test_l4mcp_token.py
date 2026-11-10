@@ -3,14 +3,38 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from uuid import uuid4
 
+import jwt
 import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
-from jose import jwt
 from starlette.requests import Request
 
 from app import auth
 from app.config import settings
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [{"aud": "wrong"}, {"iss": "wrong"}, {"exp": 1}, {"token_type": "tenant"}],
+)
+def test_api_token_domain_is_enforced(monkeypatch, changes):
+    import secrets
+
+    monkeypatch.setattr(settings, "jwt_secret_hex", secrets.token_hex(32))
+    monkeypatch.setattr(settings, "jwt_issuer_mock_enabled", False)
+    payload = {
+        "sub": "owner",
+        "jti": str(uuid4()),
+        "token_type": "api_token",
+        "iss": "menubuilder-api-token",
+        "aud": "l4mcp",
+        "exp": datetime.now(UTC) + timedelta(minutes=10),
+    }
+    payload.update(changes)
+    token = jwt.encode(payload, settings.jwt_secret_bytes, algorithm="HS256")
+    with pytest.raises(HTTPException) as exc:
+        auth.decode_token(token)
+    assert exc.value.status_code == 401
 
 
 @pytest.mark.anyio

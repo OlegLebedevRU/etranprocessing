@@ -1,8 +1,8 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import jwt
 from fastapi import APIRouter, Depends, HTTPException
-from jose import jwt
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
