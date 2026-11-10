@@ -1,17 +1,7 @@
 name: HEVC frozen contract
 on:
-  pull_request:
-    paths:
-      - 'contracts/hevc-v2/**'
-      - 'contracts/hevc-v2.lock.json'
-      - '.github/workflows/hevc-contract.yml'
-      - '.gitattributes'
-  push:
-    paths:
-      - 'contracts/hevc-v2/**'
-      - 'contracts/hevc-v2.lock.json'
-      - '.github/workflows/hevc-contract.yml'
-      - '.gitattributes'
+  # Disabled in GitHub as well; retain an explicit manual check for future use.
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
