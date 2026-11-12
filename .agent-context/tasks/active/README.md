@@ -1,5 +1,10 @@
 # Active task packets
 
+- [FM on demand — задание агенту](2026-11-12-fm-on-demand-agent-task.md): idle0
+  polling, probe по клику, existing active ACK; целевой контракт, код ещё впереди.
+- [FM PB isolation — release handoff](2026-11-12-fm-db-isolation.md): deployed
+  pool isolation/sampling/DB503; exact digest и границы runtime-проверки.
+
 - [Desktop raster adaptation — draft](2026-10-27-desktop-raster-adaptation-draft.md) —
   original-initiator channel,2:1 raster steps, software H264, live geometry/input
   invariants and outstanding decoder/queue acceptance gates.

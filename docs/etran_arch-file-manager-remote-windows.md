@@ -1,5 +1,11 @@
 # L4FM: итоговая архитектура и развитие
 
+Обновление2026-11-12: [контракт готовности по требованию](etran_arch-file-manager-on-demand-readiness.md)
+заменяет постоянный hello и fleet readiness polling в целевой следующей версии.
+Он пока не реализован. Выпущенная PB защита — отдельный bounded FM pool и
+sampling discovery; действующие агенты сохраняют hello15 с/TTL45 с.
+Разделы ниже описывают текущий FM v2, а не новый on-demand lifecycle.
+
 Актуально на 2026-10-05. **FM v2 выпущен**, общий раздел «Файлы» доступен в
 Classic/L4Desk. Suite **1.13.1** подписана, опубликована и установлена на 1000007
 через l4mcp; L4Con **1.12.1**. Этот документ описывает итог реализации.
@@ -58,6 +64,9 @@ flowchart LR
 ## 3. Readiness, идентичность и монопольный сеанс
 
 PB hello объявляет version/instance UUID/protocol 2/capabilities каждые 15 с.
+Это текущий legacy readiness режим; [новый целевой flow](etran_arch-file-manager-on-demand-readiness.md)
+получает те же метаданные только по пользовательскому probe, а active freshness
+обновляет существующим start/renew ACK. До совместимого rollout hello не отключать.
 Readiness учитывает текущий cert serial, active terminal, tenant, heartbeat <45 с,
 `filesystem_ready`, настройки PB и MQTT service availability. Обязательны
 `fs.session`, `fs.list`, `fs.read`, `fs.write`, `fs.cancel`, `fs.proxy`,
@@ -263,6 +272,7 @@ window.closed); причины и успешные повторные прове
 
 | Приоритет / владелец | Следующий результат | Критерий приёмки |
 |---|---|---|
+| P0 — PB + IoT + native + MB/UI | [FM по требованию](etran_arch-file-manager-on-demand-readiness.md), [задание агенту](../.agent-context/tasks/active/2026-11-12-fm-on-demand-agent-task.md) | Idle0 FM HTTPS/DB writes; fleet0 readiness fan-out; bounded probe по клику; active ACK без отдельного hello |
 | P0 — native + PB | Crash staging cleanup и полный unknown-commit recovery | Разрывы до/после flush/rename/receipt, kill/restart/power-loss fixtures; нет повторной записи или ложного успеха |
 | P0 — IoT + native + QA | Сквозная fault/soak matrix | Lost/duplicate/late ACK, broker/Redis reconnect, process restart, policy deny mid-transfer, lease conflicts; измеренные сроки освобождения и стабильность suite |
 | P0 — Windows + UI | Матрица пользовательских прав | Standard/admin-limited, locked/logoff/switch-user, removable/offline drives, protected read; доказать отсутствие privileged upload и показать точную причину отказа |
@@ -286,5 +296,7 @@ window.closed); причины и успешные повторные прове
   [review findings](etran_arch-l4fm-review-and-improvement-plan.md),
   [implementation/release evidence](../.agent-context/tasks/active/2026-10-05-l4fm-improvements.md).
 
-При финализации документации новых terminal/broker/server probes и деплоя не было.
-План выше не объявлен реализованным; синхронизация Git не заменяет runtime validation.
+Для on-demand flow terminal/broker probes и cross-stack деплоя ещё не было.
+Отдельная PB mitigation выпущена2026-11-12; её evidence — в
+[release handoff](../.agent-context/tasks/active/2026-11-12-fm-db-isolation.md).
+План развития не объявлен реализованным; синхронизация Git не заменяет runtime validation.

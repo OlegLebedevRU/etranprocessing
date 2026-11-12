@@ -43,10 +43,47 @@
 - Production preflight SSH: MemAvailable1814MiB, disk53%, load0.57. MCP Ops tools
   unavailable, SSH fallback used. DB current=head034. Current PB code vs main
   differs only in .python-version before this change.
-- Deployment and live behavior: pending release; do not infer E2E from unit tests.
+- Linux builder:36 CI tests and381 PB passed/2skipped; Ruff/format/Pyright passed.
+- Deploy helper:5 preservation tests passed. Read-only secret pattern scan across
+  permitted tracked files:21 file/rule matches reviewed (fixtures, placeholder
+  URLs and PEM header validators); no real credentials found by this scan.
+
+## Production release — 2026-11-12, verified13:56 UTC
+
+- PR156 merged; source `61a14fc1f91cadd346b466ff3b32683d783b7bcf`.
+- Builder launcher build-only → registry digest
+  `sha256:f6d9f36cc28ee96e5be4d296c88359a10aef8857e3a7d561acda0d097fb86972`.
+- Production pulled the exact digest. Scoped repository helper delivered via scp
+  preserves all actual Compose overlays, including existing operator overrides.
+  Container `3166779ae4f0ff512a4c19b2e5bdf44a48f2bae7121560d7c4504ee9e0733fb7`.
+- Health200; natural agent hello200. First observed acquisition43.9ms/total155.9ms;
+  subsequent acquisition5.1–6.2ms and total20.1–41.7ms. Short observation only,
+  not a performance benchmark or proof of the previous incident root cause.
+- Helper verified environment, mounts, network and neighbor container IDs unchanged.
+  No migrations; schema034. First health probe during startup refused connection,
+  standard bounded retry succeeded; no rollback was required.
+- Follow-up through approximately14:03 UTC:154 natural hello HTTP200,
+  0 fm_database_unavailable log events,16 payment endpoint HTTP200. These are
+  transport observations, not verification of payment business outcomes.
+  MemAvailable1837MiB, disk54%, load0.24.
+- Server evidence: `.etran-ci/runs/fm-isolation/<release-SHA>/verified.json`, durable
+  forward/rollback overlays in the same directory. Previous image digest
+  `sha256:c568862762a6881dde24285cd3d7e4a40632342ed7068e0f2e3b120cc3d04d82`.
+- Builder was used build-only so its automatic deployment checkpoint was not
+  advanced. This release is recorded by production verified.json and this handoff;
+  future releases must preserve live overlays again, not use a default base-only
+  rollout. No direct builder source/tool/state edits were performed.
+- Native transfer/lease hardware E2E, disabled-terminal live scenario and injected
+  production DB failure were not run; auth/failure regressions are local tests.
 
 ## Remaining
 
-- Record release revision/digest and actual live observations after rollout.
-- Demand driven readiness contract and agent assignment follow PB deployment.
+- [Demand driven readiness contract](../../../docs/etran_arch-file-manager-on-demand-readiness.md)
+  and [agent assignment](2026-11-12-fm-on-demand-agent-task.md) are prepared;
+  their cross-stack implementation remains a subsequent task.
 - No production credentials created; no scratch scripts copied into containers.
+- Temporary scanner/PR-body files removed. Runtime release records/overlays retained
+  because Compose references them. User's original dirty checkout was untouched.
+- Documentation link check:9 changed/new Markdown files,176 local links checked,
+  no broken links; excluded native/legacy paths not inspected. New docs sensitive
+  pattern scan and git diff --check passed. No extra code tests for doc-only step.
