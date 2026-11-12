@@ -1,6 +1,6 @@
 # L4FM v2: текущий контракт
 
-## 2026-11-12: PB mitigation и следующий контракт
+## 2026-11-12: on-demand серверы и пилот773
 
 PB release61a14fc: отдельный FM pool2/overflow0, timeout acquire/connect/command
 1/3/5 с, DB503/Retry-After5, successful hello discovery sampling300 с. Current
@@ -8,10 +8,15 @@ auth SN/serial/activity, persisted freshness45 с и generation fencing сохр
 [Runtime handoff](../tasks/active/2026-11-12-fm-db-isolation.md).
 
 [Целевой on-demand контракт](../../docs/etran_arch-file-manager-on-demand-readiness.md)
-принят для следующей реализации: idle0 FM HTTP/writes, fleet0 readiness fan-out,
+реализован в etranprocessing PR158 / IoT PR171: idle0 FM HTTP/writes, fleet0 readiness fan-out,
 probe по клику, active freshness из существующего ACK, без startup/periodic hello.
 [Задание](../tasks/active/2026-11-12-fm-on-demand-agent-task.md).
-Пока работает прежний wire/protocol2; целевой flow ещё не deployed.
+Серверы и UI развёрнуты; native owner — `OlegLebedevRU/l4tools`, suite1.13.66 /
+L4Con1.12.5 проверен агентом на773; пользователь сообщил об установке66 на119 и55.
+Реальные proof/start/renew/close и600 с fleet UI без FM-запросов проверены.
+Idle:1863 с без запуска FM child;1801 с без изменений FM rows в31 DB sample.
+Legacy protocol2/hello15 с сохранён для не обновлённых клиентов. Новая capability
+`fs.readiness_on_demand` выбирает single-use proof; wire v2 и svc presence прежние.
 
 Актуально 2026-10-05. [Каноническая архитектура и план](../../docs/etran_arch-file-manager-remote-windows.md).
 [История реализации / runtime evidence](../tasks/active/2026-10-05-l4fm-improvements.md).

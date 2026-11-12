@@ -1,10 +1,14 @@
 # L4FM: итоговая архитектура и развитие
 
 Обновление2026-11-12: [контракт готовности по требованию](etran_arch-file-manager-on-demand-readiness.md)
-заменяет постоянный hello и fleet readiness polling в целевой следующей версии.
-Он пока не реализован. Выпущенная PB защита — отдельный bounded FM pool и
-sampling discovery; действующие агенты сохраняют hello15 с/TTL45 с.
-Разделы ниже описывают текущий FM v2, а не новый on-demand lifecycle.
+реализован и развёрнут в etranprocessing PR158 / IoT PR171. L4Con1.12.5 в
+suite1.13.66 установлен на пилоте773; проверены реальные browser ACK/close,
+600 с fleet UI без FM-запросов и1801 с без readiness DB writes.
+Для capability `fs.readiness_on_demand` действует указанный дополнительный
+lifecycle: явный probe, single-use proof, freshness активного сеанса от ACK.
+PB bounded FM pool и sampling discovery сохранены; старые клиенты продолжают
+hello15 с/TTL45 с до собственного обновления. Исторические разделы hello ниже
+относятся к этой совместимости. [Handoff](../.agent-context/tasks/completed/2026-11-12-fm-on-demand-release.md).
 
 Актуально на 2026-10-05. **FM v2 выпущен**, общий раздел «Файлы» доступен в
 Classic/L4Desk. Suite **1.13.1** подписана, опубликована и установлена на 1000007

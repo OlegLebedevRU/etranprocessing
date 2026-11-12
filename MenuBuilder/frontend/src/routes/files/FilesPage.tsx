@@ -398,7 +398,7 @@ function TenantFiles({ org, target }: { org: number; target?: number }) {
             locale={{ emptyText: "Нет онлайн-терминалов" }} columns={[
               { title: "Терминал", dataIndex: "device_id", render: (id: number) => <Button type="link" icon={<DesktopOutlined />} disabled={navigationDisabled || (drains[id] || 0) > now} onClick={() => void select(id)}>{id}</Button> },
               { title: "Название", dataIndex: "description" },
-              { title: "Файловый менеджер", render: (_, item) => availability[item.device_id] ? fmReason[availability[item.device_id].state] || availability[item.device_id].state : "Проверка…" },
+              { title: "Файловый менеджер", render: (_, item) => availability[item.device_id] ? fmReason[availability[item.device_id].state] || availability[item.device_id].state : fmReason.unchecked },
             ]} /> : !path ? <Space orientation="vertical">
             {localRoots.length ? localRoots.map(root => <Button key={root} icon={<HddOutlined />} disabled={navigationDisabled} onClick={() => void browse(root)}>{root}</Button>) : <Empty description="Нет доступных дисков или каталогов" />}
           </Space> : <>
