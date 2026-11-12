@@ -1,13 +1,16 @@
 # MQTT: remote control, console и presence
 
-## FM readiness по требованию — целевой дизайн 2026-11-12
+## FM readiness по требованию — выпущено2026-11-12
 
 [Контракт](../../docs/etran_arch-file-manager-on-demand-readiness.md): additive
 action=probe на существующем srv/{SN}/fmc, v2/QoS1/no-retain, command_id и expiry;
 только probe без lease_id. Ответ готовности — mTLS HTTPS в PB, не новый MQTT
 presence. PUBACK не ready. Существующие list/stop требуют прежнюю lease.
 Новые топики/CONNECT/client_id и изменения svc/app/ctl presence не вводятся.
-Пока это не producer/consumer implementation: native и app1 сверит следующий агент.
+Producer app1 PR171 и consumer L4Con1.12.5/suite1.13.66 сверены и выпущены.
+На773 подтверждены реальные probe/start/renew/close,600 с fleet UI без FM
+запросов и1801 с неизменных readiness-строк. Native process trace1863 с:0 starts.
+Подробности и границы доказательства — в [handoff](../tasks/completed/2026-11-12-fm-on-demand-release.md).
 
 ## L4Update — принятая архитектура 2026-10-06, не реализовано
 

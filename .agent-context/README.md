@@ -38,7 +38,7 @@ Skills описывают **как работать**, карточки — **ч
 - [Video streaming](contracts/video-streaming.md), [l4media](components/l4media.md) — медиатракт.
 - [Remote console](contracts/remote-console.md) — RPC и stdout/stderr.
 
-- [File manager](contracts/file-manager.md) — финализированный L4FM v2, suite1.13.1 на1000007; [архитектура/решения/roadmap](../docs/etran_arch-file-manager-remote-windows.md), границы E2E и незакрытые fault/privilege/soak проверки.
+- [File manager](contracts/file-manager.md) — on-demand развёрнут; suite1.13.66/L4Con1.12.5 проверен на773, установка66 на119/55 сообщена пользователем. [Итоги и границы проверки](tasks/completed/2026-11-12-fm-on-demand-release.md), [архитектура](../docs/etran_arch-file-manager-remote-windows.md).
 
 - [Обновление L4 Tools через l4mcp](../docs/ops_run-l4tools-update-via-l4mcp.md) — точный промпт и этапы; runtime 1000007, 1.13.0 → 1.13.1. Сначала reconcile существующей задачи, затем запуск; все terminal HTTP через Leo4Proxy.
 

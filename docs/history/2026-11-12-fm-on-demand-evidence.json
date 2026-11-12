@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "date": "2026-11-12",
+  "terminal": 773,
+  "scope": "Agent live mutations773 only; owner reports66 installed119 and55",
+  "server_sources": {
+    "processingbackend": "a2b50284e87c450b103b989f5b33d25e6c7544fa",
+    "menubuilder_backend": "a2b50284e87c450b103b989f5b33d25e6c7544fa",
+    "iot_app1": "879a9e654fbad9269cc9ee03443e2d7926ba437b"
+  },
+  "images": {
+    "processingbackend": "sha256:794657451afb1d555e6cc9d7d133c79f21b01e6f3c3796c948c918e05e597041",
+    "menubuilder_backend": "sha256:5c1ea0be0c4f5f50a1934cc7a3bb68e78719f5f35e01fa10627ec41608650f3c",
+    "iot_app1": "sha256:25db177157fb11b7e47a673126d4153545aeb6edf0d0c03f98daa1c9085a084c",
+    "initial_frontend": "sha256:622624b235c0cfbcd5d168e7d612d63fc8f62ed507249b517dccb8d3aca97a1c"
+  },
+  "database_revision": "035",
+  "native": {
+    "suite": "1.13.66",
+    "l4con": "1.12.5",
+    "source": "c0bc689ef25613dc18a7f79e3c1b6ed8220d0187",
+    "private_kit_source": "2380217a61d119a342f7d9dc7aa9a98034ef4d8e",
+    "arch": "x64",
+    "installed_exes_verified": 10,
+    "reused_signed_exes_in_package": 18,
+    "update_operation": "c612e229-40d6-4df2-8e1e-bd9d69c9226f",
+    "preflight_exit": 0,
+    "update_exit": 0,
+    "certificate_with_private_key_preserved": true,
+    "service_arguments_and_accounts_preserved": true,
+    "unchanged_config_files": 4,
+    "changed_launch_selectors": 9
+  },
+  "fleet_browser_idle": {
+    "started_utc": "2026-11-12T16:11:10.686Z",
+    "completed_utc": "2026-11-12T16:21:10.701Z",
+    "duration_ms": 600015,
+    "fm_requests": 0
+  },
+  "browser_e2e": {
+    "started_utc": "2026-11-12T16:25:09.646Z",
+    "completed_utc": "2026-11-12T16:26:16.582Z",
+    "probe_id": "24327a04-5c34-4a01-ae89-7bad9ff6f419",
+    "probe_count": 1,
+    "session_count": 1,
+    "renewals": 4,
+    "matching_terminal_acks": 4,
+    "beyond_initial_expiry": true,
+    "stopped": true
+  },
+  "agent_idle": {
+    "started_utc": "2026-11-12T16:27:19.6219734Z",
+    "completed_utc": "2026-11-12T16:58:22.7316280Z",
+    "duration_seconds": 1863.1096545999999,
+    "initial_workers": 0,
+    "l4con_process_start_events": 0,
+    "db_duration_seconds": 1801.2966704005376,
+    "db_samples": 31,
+    "agent_and_probe_row_versions_unchanged": true,
+    "last_seen_at": "2026-11-12 16:26:11.777871+00",
+    "https_basis": "No FM child at baseline and no L4Con start events throughout; source confines FM WinHTTP to owned child. No packet capture."
+  },
+  "limitations": [
+    "No full OS reboot or physical Windows7 run",
+    "Live certificate rotation, Redis restart and all crash/rollback permutations not injected",
+    "One earlier probe timed out before any lease; subsequent explicit probe succeeded; precise transport cause not proven",
+    "Fleet legacy hello removal and further agent-controlled native rollout are separate scope"
+  ]
+}

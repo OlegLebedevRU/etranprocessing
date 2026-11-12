@@ -3,8 +3,8 @@
 ## Готовый текст запуска
 
 > Реализуй [контракт FM по требованию](../../../docs/etran_arch-file-manager-on-demand-readiness.md).
-> Scope: ProcessingBackend, shared, MenuBuilder backend/frontend, tools/l4con и
-> необходимая упаковка tools/l4superv; app1 — в его отдельном репозитории после
+> Scope: ProcessingBackend, shared, MenuBuilder backend/frontend; native L4Con и
+> signed packaging — в отдельном `OlegLebedevRU/l4tools`; app1 — в его репозитории после
 > проверки собственного AGENTS.md. Цель: отсутствие фоновых FM HTTPS/DB-записей
 > у idle агента и readiness fan-out на fleet page. Не меняй платежи, сертификатную
 > выдачу, MQTT presence, общую lease или политику файловых прав. Подготовь
@@ -61,7 +61,8 @@ IoT нужно определить после сверки внешнего sou
 
 - Idle30 мин:0 FM HTTPS/DB writes; reboot не вызывает hello.
 - Fleet10 мин без клика:0 readiness запросов по всему парку.
-- Один выбранный терминал: один bounded probe, без acquire/worker; далее обычные
+- Один выбранный терминал: один bounded probe, без lease/file work; metadata helper
+  ограничен30 с. Далее обычные
   actor/device policy и IoT conflict admission с single-use proof.
 - Active: freshness45 с от проверенного start/renew ACK; отдельного hello нет.
 - Close/expiry/error возвращает FM к0 после безопасного stop/drain.
@@ -83,6 +84,16 @@ IoT нужно определить после сверки внешнего sou
 
 ## Текущее evidence
 
-PB mitigation deployed; [handoff](2026-11-12-fm-db-isolation.md).
-Новый on-demand контракт документирован; cross-stack реализация, native source
-review, сборки, MQTT probes и hardware pilot в этой сессии не выполнялись.
+Это исходное задание сохранено как спецификация, не указание заново реализовать
+уже принятый код. PB mitigation сохранён; etranprocessing PR158 и IoT PR171
+развёрнуты. Native PR13/14, signed suite1.13.66/L4Con1.12.5 и частный kit PR15
+установлены на773. MQTT extra_service и повторный UAC пользователь подтвердил
+в текущей задаче; повторно спрашивать это в её продолжении не нужно.
+
+Реальные malformed/wrong-view отказы, correlated probe, start ACK, navigation,
+browser renew ACK после исходного deadline и close проверены. Fleet UI600 с:
+0 FM requests. Native idle1863 с:0 FM child starts; DB idle1801 с/31 sample:
+FM rows неизменны. Пользователь сообщил об установке66 на119 и55. Итоговые границы
+доказательства и release SHA — в [implementation packet](../completed/2026-11-12-fm-on-demand-release.md).
+Следующему агенту: начинать с актуального handoff и оставшихся явно перечисленных
+проверок; обновление других терминалов и удаление legacy hello — отдельный scope.

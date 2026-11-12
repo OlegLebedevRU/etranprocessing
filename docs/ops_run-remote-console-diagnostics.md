@@ -242,10 +242,13 @@ scope `files`, несовместимым с `console`, `stream`, `input` и `vi
 не допускается. До выдачи несовместимого режима обязательны stop/drain и
 подтверждение остановки либо безопасный deadline; UI unmount не освобождает lock.
 
-Это **локальный кандидат в отдельном IoT checkout**, не подтверждение deployed app1.
-Сигнализация FM start/renew/stop/cancel идёт через MQTT; параметры и результаты
-агента — HTTPS PB; байты — исключительно agent–S3–browser. RPC 7020–7023 реализованы в producer/consumer и внесены в registry;
-presence и текущие console RPC сохраняются.
+На2026-11-12 FM producer app1 PR171 и серверы etranprocessing PR158 развёрнуты;
+на773 проверен consumer L4Con1.12.5/suite1.13.66. Start/renew используют RPC7023,
+transfer —7021; list/stop — v2 `fmc`/`fmr`. RPC7020/7022 и7023-stop отклоняются.
+Readiness по явному клику добавляет action=probe на существующем `fmc`, без lease;
+ответ — mTLS HTTPS в PB. [Контракт](etran_arch-file-manager-on-demand-readiness.md).
+Параметры и результаты агента — HTTPS PB; байты — только agent–S3–browser.
+Presence и текущие console RPC сохраняются.
 Контракты, совместимость и поэтапный выпуск:
 [FM architecture и release gates](etran_arch-file-manager-remote-windows.md).
 
