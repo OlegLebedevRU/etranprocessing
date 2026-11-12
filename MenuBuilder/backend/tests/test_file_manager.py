@@ -100,6 +100,7 @@ async def test_start_registers_pb_before_mqtt_signal_and_stops_on_failure():
     ):
         await fm.start(
             10,
+            fm.StartBody(),
             uuid4(),
             {"sub": "fixture", "role": "user", "session_id": "fixture"},
             AsyncMock(),

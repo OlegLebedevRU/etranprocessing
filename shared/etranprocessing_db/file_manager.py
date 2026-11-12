@@ -90,3 +90,24 @@ class FileManagerOperation(Base):
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
+
+
+class FileManagerReadinessProbe(Base):
+    """One bounded, owner-bound readiness exchange per terminal; PB owns writes."""
+
+    __tablename__ = "fm_readiness_probes"
+    terminal_id: Mapped[int] = mapped_column(
+        ForeignKey("terminals.id", ondelete="CASCADE"), primary_key=True
+    )
+    request_id: Mapped[UUID] = mapped_column(nullable=False, unique=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    actor: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    cert_serial: Mapped[str] = mapped_column(String(100), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    proof_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    agent_instance_id: Mapped[UUID | None] = mapped_column()
+    response_hash: Mapped[str | None] = mapped_column(String(64))
+    result: Mapped[dict | None] = mapped_column(JSONB)
+    consumed_by: Mapped[UUID | None] = mapped_column()

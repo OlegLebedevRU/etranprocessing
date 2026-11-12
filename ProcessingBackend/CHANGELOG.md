@@ -1,5 +1,19 @@
 # Changelog — ProcessingBackend
 
+## Unreleased — demand-driven file manager
+
+### Added
+
+- Additive035 bounded per-terminal readiness probe, owner/view-bound single-use
+  proof, strict current-certificate result registration and duplicate fencing.
+
+### Changed
+
+- New FM mode is checked only on explicit use. Active freshness advances on a
+  validated start/renew ACK; passive reads/ticket fetches do not refresh it.
+- Legacy hello remains compatible, but cannot downgrade an on-demand agent.
+  Shared declarative package0.1.2; no payment/certificate issuance changes.
+
 ## 2026-11-12 — FM database isolation
 
 ### Changed

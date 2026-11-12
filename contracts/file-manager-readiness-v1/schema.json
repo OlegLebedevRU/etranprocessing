@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:leo4:file-manager-readiness:1",
+  "$defs": {
+    "command": {
+      "type": "object", "additionalProperties": false,
+      "required": ["v", "action", "command_id", "expires_at"],
+      "properties": {
+        "v": {"const": 2}, "action": {"const": "probe"},
+        "command_id": {"type": "string", "format": "uuid"},
+        "expires_at": {"type": "integer", "minimum": 1}
+      }
+    },
+    "success": {
+      "type": "object", "additionalProperties": false,
+      "required": ["request_id", "agent_instance_id", "agent_version", "protocol_version", "capabilities", "filesystem_ready", "readiness_mode"],
+      "properties": {
+        "request_id": {"type": "string", "format": "uuid"},
+        "agent_instance_id": {"type": "string", "format": "uuid"},
+        "agent_version": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[0-9A-Za-z.+_-]+$"},
+        "protocol_version": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "capabilities": {"type": "array", "maxItems": 32, "uniqueItems": true, "contains": {"const": "fs.readiness_on_demand"}, "items": {"type": "string", "maxLength": 64, "pattern": "^fs\\."}},
+        "filesystem_ready": {"type": "boolean"}, "readiness_mode": {"const": "on_demand_v1"}
+      }
+    },
+    "failure": {
+      "type": "object", "additionalProperties": false,
+      "required": ["request_id", "agent_instance_id", "error_code"],
+      "properties": {
+        "request_id": {"type": "string", "format": "uuid"},
+        "agent_instance_id": {"type": "string", "format": "uuid"},
+        "error_code": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z0-9_]+$"}
+      }
+    }
+  },
+  "oneOf": [{"$ref": "#/$defs/command"}, {"$ref": "#/$defs/success"}, {"$ref": "#/$defs/failure"}]
+}

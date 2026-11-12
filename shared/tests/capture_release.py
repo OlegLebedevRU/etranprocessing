@@ -1,17 +1,21 @@
 """Generate SHA-256 provenance for the source package published through Git."""
 
+import argparse
 import hashlib
 import json
 import tomllib
 from pathlib import Path
 
 root = Path(__file__).parents[1]
+parser = argparse.ArgumentParser()
+parser.add_argument("--revision", required=True, choices=["035"])
+args = parser.parse_args()
 config = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
 paths = sorted((root / "etranprocessing_db").rglob("*.py")) + [
     root / "pyproject.toml",
     root / "uv.lock",
-    root / "docs" / "l4desk" / "schema-v1.json",
-    root / "docs" / "l4desk" / "schema-v1.md",
+    root / "docs" / "l4desk" / f"schema-v{args.revision}.json",
+    root / "docs" / "l4desk" / f"schema-v{args.revision}.md",
 ]
 manifest = {
     "package": config["project"]["name"],
@@ -26,7 +30,7 @@ manifest = {
         for path in paths
     },
 }
-(root / "docs" / "l4desk" / "package-source-v011.json").write_text(
+(root / "docs" / "l4desk" / f"package-source-v{args.revision}.json").write_text(
     json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
     encoding="utf-8",
     newline="\n",

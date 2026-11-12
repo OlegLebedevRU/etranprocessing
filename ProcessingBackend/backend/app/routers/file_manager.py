@@ -86,7 +86,26 @@ async def hello(
     # Immediate issuer names differ between root-issued and issuing-CA leaves.
     if not terminal.is_active:
         raise HTTPException(403, detail={"code": "terminal_inactive"})
+    identity = verified_terminal_identity(request)
+    locked_terminal = await db.scalar(
+        select(Terminal)
+        .where(Terminal.id == terminal.id)
+        .execution_options(populate_existing=True)
+        .with_for_update(of=Terminal)
+    )
+    if (
+        locked_terminal is None
+        or not locked_terminal.is_active
+        or locked_terminal.sn != identity[0]
+        or (locked_terminal.cert_serial or "").upper().lstrip("0")
+        != identity[1].upper().lstrip("0")
+    ):
+        raise HTTPException(401, "Certificate changed during hello")
+    terminal = locked_terminal
     now = datetime.now(UTC)
+    existing_agent = await db.get(FileManagerAgent, terminal.id)
+    if existing_agent and "fs.readiness_on_demand" in existing_agent.capabilities:
+        raise HTTPException(409, detail={"code": "fm_probe_required"})
     values = {
         **body.model_dump(),
         "terminal_id": terminal.id,
@@ -124,6 +143,8 @@ async def readiness(
         raise HTTPException(404, "Device not found")
     agent = await db.get(FileManagerAgent, terminal.id)
     response.headers["Cache-Control"] = "no-store"
+    if agent and "fs.readiness_on_demand" in agent.capabilities:
+        return AgentReadiness(state="unchecked", server_time=datetime.now(UTC))
     return deployment_readiness(terminal, agent, now=datetime.now(UTC))
 
 
@@ -180,9 +201,11 @@ async def register_session(
     if lease.get("device_id") != device_id:
         raise HTTPException(403, "Lease device mismatch")
     terminal = await db.scalar(
-        select(Terminal).where(
+        select(Terminal)
+        .where(
             Terminal.device_id == device_id, Terminal.org_id == int(actor["X-Org-Id"])
         )
+        .with_for_update(of=Terminal)
     )
     if terminal is None:
         raise HTTPException(404, "Device not found")
@@ -197,6 +220,12 @@ async def register_session(
         if operation_actor(existing) != actor or existing.terminal_id != terminal.id:
             raise HTTPException(409, "Session identity mismatch")
         return public_operation(existing)
+    if agent and "fs.readiness_on_demand" in agent.capabilities:
+        from app.routers.file_manager_probe import consume_probe
+
+        await consume_probe(
+            db, terminal, actor, body.readiness_probe_id, body.lease_id, agent
+        )
     # Acquiring a new shared slot proves the previous worker's deadline/drain
     # has elapsed. A commit with a lost receipt stays unresolved for reconciliation.
     await db.execute(
@@ -340,7 +369,6 @@ async def agent_operation(
     lease = await lease_request(operation.lease_id, operation_actor(operation))
     if lease.get("device_id") != terminal.device_id:
         raise HTTPException(403, "Lease device mismatch")
-    agent.last_seen_at = datetime.now(UTC)
     return operation
 
 
@@ -401,6 +429,9 @@ async def agent_result(
             **operation.data,
             "applied_expires_at": operation.data["ticket_expires_at"],
         }
+        agent = await db.get(FileManagerAgent, terminal.id)
+        if agent is not None:
+            agent.last_seen_at = datetime.now(UTC)
         if body.roots is not None:
             import re
 

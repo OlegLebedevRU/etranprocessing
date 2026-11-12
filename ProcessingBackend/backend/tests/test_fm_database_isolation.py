@@ -194,6 +194,7 @@ async def test_hello_retains_real_auth_and_uses_only_fm_dependency(monkeypatch, 
         None if state == "serial_mismatch" else terminal
     )
     database.execute.return_value = result
+    database.scalar.return_value = terminal
     instance = uuid4()
     previous = app.dependency_overrides.copy()
 

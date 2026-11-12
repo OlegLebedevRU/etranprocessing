@@ -28,6 +28,7 @@ class AgentReadiness(BaseModel):
     state: Literal[
         "ready",
         "not_registered",
+        "unchecked",
         "offline",
         "incompatible",
         "filesystem_unavailable",
@@ -51,6 +52,7 @@ class AgentReadiness(BaseModel):
 class SessionRegistration(BaseModel):
     model_config = ConfigDict(extra="forbid")
     lease_id: UUID
+    readiness_probe_id: UUID | None = None
 
 
 class OperationCreate(BaseModel):

@@ -1,5 +1,15 @@
 # Changelog — MenuBuilder
 
+## Unreleased — demand-driven file manager
+
+### Changed
+
+- Fleet listing no longer polls file-manager readiness across the park. Explicit
+  terminal selection requests a bounded probe and binds its proof to session
+  start. Closing/switching cancels stale selection results; no automatic acquire.
+- Existing live legacy agents retain selected-terminal compatibility. Schema
+  gate accepts034 and additive035 for the ordered PB migration rollout.
+
 ## Unreleased — payment reports
 
 ### Added
