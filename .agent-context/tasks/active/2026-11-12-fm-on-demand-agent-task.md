@@ -1,8 +1,12 @@
 # Задание агенту: файловый менеджер только по требованию
 
-## Готовый текст запуска
+## Готовый текст продолжения
 
-> Реализуй [контракт FM по требованию](../../../docs/etran_arch-file-manager-on-demand-readiness.md).
+> Сверь [итоговый handoff](../completed/2026-11-12-fm-on-demand-release.md) и
+> [контракт FM по требованию](../../../docs/etran_arch-file-manager-on-demand-readiness.md).
+> Реализация и пилот773 завершены; не повторяй их. Для следующего rollout сначала
+> получи явно названную группу терминалов. Отдельно исследуй единичный таймаут
+> probe: без автоматического повторения, legacy fallback и расширения FM-нагрузки.
 > Scope: ProcessingBackend, shared, MenuBuilder backend/frontend; native L4Con и
 > signed packaging — в отдельном `OlegLebedevRU/l4tools`; app1 — в его репозитории после
 > проверки собственного AGENTS.md. Цель: отсутствие фоновых FM HTTPS/DB-записей

@@ -104,3 +104,14 @@ idle samplers exited and WMI subscription was unregistered. No ad hoc JWT was
 minted; provided test token stayed in memory, expired naturally and its original
 user-owned file was preserved. Signed releases, failed65/67 evidence, protected
 native operation/publisher records and live Compose overlays are retained.
+
+
+## Final static publication
+
+PR159 accepted final idle-label correction and this evidence. Standard builder
+161 tests and production build passed on13a246869ebd83f9ad7732cec25d5ca8e49cbc7a.
+Published frontend digest
+sha256:513d5405a41636014749344fb7d422067978698c5dcb1ca0df7d9f74a2c94452
+passed the standard served-index comparison. PB/MB/app1/nginx container IDs
+remain identical and running; no nginx restart. Native release audit records
+accepted in l4tools PR18, main62b187c04cadc5983c7167b530f6d1a8573ed80b.

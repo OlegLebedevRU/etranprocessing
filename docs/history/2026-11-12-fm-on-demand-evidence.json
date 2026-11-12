@@ -6,13 +6,15 @@
   "server_sources": {
     "processingbackend": "a2b50284e87c450b103b989f5b33d25e6c7544fa",
     "menubuilder_backend": "a2b50284e87c450b103b989f5b33d25e6c7544fa",
-    "iot_app1": "879a9e654fbad9269cc9ee03443e2d7926ba437b"
+    "iot_app1": "879a9e654fbad9269cc9ee03443e2d7926ba437b",
+    "final_frontend": "13a246869ebd83f9ad7732cec25d5ca8e49cbc7a"
   },
   "images": {
     "processingbackend": "sha256:794657451afb1d555e6cc9d7d133c79f21b01e6f3c3796c948c918e05e597041",
     "menubuilder_backend": "sha256:5c1ea0be0c4f5f50a1934cc7a3bb68e78719f5f35e01fa10627ec41608650f3c",
     "iot_app1": "sha256:25db177157fb11b7e47a673126d4153545aeb6edf0d0c03f98daa1c9085a084c",
-    "initial_frontend": "sha256:622624b235c0cfbcd5d168e7d612d63fc8f62ed507249b517dccb8d3aca97a1c"
+    "initial_frontend": "sha256:622624b235c0cfbcd5d168e7d612d63fc8f62ed507249b517dccb8d3aca97a1c",
+    "final_frontend": "sha256:513d5405a41636014749344fb7d422067978698c5dcb1ca0df7d9f74a2c94452"
   },
   "database_revision": "035",
   "native": {
@@ -65,5 +67,12 @@
     "Live certificate rotation, Redis restart and all crash/rollback permutations not injected",
     "One earlier probe timed out before any lease; subsequent explicit probe succeeded; precise transport cause not proven",
     "Fleet legacy hello removal and further agent-controlled native rollout are separate scope"
-  ]
+  ],
+  "final_frontend_verification": {
+    "standard_builder_tests_passed": 161,
+    "production_build_passed": true,
+    "served_index_matches_image": true,
+    "nginx_restarted": false,
+    "four_existing_container_ids_preserved": true
+  }
 }
