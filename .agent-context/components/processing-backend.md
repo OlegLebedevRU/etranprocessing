@@ -1,5 +1,17 @@
 # ProcessingBackend
 
+## FM database isolation, 2026-11-12 — deployed
+
+Release main61a14fc; FM agent/internal routes and their auth use an independent
+pool2/no overflow, acquisition/connect/command1/3/5 s. Database failures503,
+no retry. Identical successful hello discovery sampled300 s with bounded cache;
+failures/current identity/45 s persisted readiness remain. No schema change.
+Windows+Linux PB381passed/2skipped, quality passed; production health and natural
+hello200, image/environment/mount/network/neighbors verified.
+[Handoff](../tasks/active/2026-11-12-fm-db-isolation.md).
+[Next contract](../../docs/etran_arch-file-manager-on-demand-readiness.md): demand
+probe and existing active ACK replace idle/fleet polling; not implemented yet.
+
 ## XP CSR compatibility, 2026-10-29 — deployed
 
 Legacy no-v provider remains CSP; modern v26 remains CNG. Explicit RSA/SHA1 CSR

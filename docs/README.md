@@ -1,5 +1,9 @@
 # Документация экосистемы etranprocessing
 
+- [Файловый менеджер по требованию](etran_arch-file-manager-on-demand-readiness.md) —
+  целевой lifecycle без фонового hello/fleet readiness polling, wire additions,
+  совместимый rollout и задание реализации; пока не runtime-контракт.
+
 - [Camera adaptive quality candidate](etran_arch-camera-adaptive-quality-candidate.md) — proposed quality payload, BFF parser and explicit offline/runtime boundary.
 
 - [Session lifecycle55](menu_arch-session-lifecycle55.md) — bounded keepalive and STOP semantics.
