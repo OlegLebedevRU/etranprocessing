@@ -1,5 +1,20 @@
 # Changelog — ProcessingBackend
 
+## 2026-11-12 — FM database isolation
+
+### Changed
+
+- FM agent/internal routes, including terminal authentication, use a separate
+  bounded pool (default 2 connections per worker, no overflow). Payment pool
+  settings are unchanged. FM acquisition/connect/command timeouts are 1/3/5 s;
+  database failures return 503 with Retry-After, without automatic retries.
+- Successful repeated FM hello certificate discovery is sampled every 300 s per
+  identity/process; discovery counters count persisted observations, not every
+  hello. Failed authentication is not sampled. Current SN/serial/activity checks,
+  persisted agent heartbeat, generation fencing and 45 s readiness remain.
+- FM database acquisition/total durations and failures are logged without
+  request payloads or credentials. No schema changes or agent update required.
+
 ## Unreleased — payment parameter encoding
 
 ### Fixed

@@ -8,6 +8,7 @@ from fastapi.responses import Response
 
 from app.config import settings
 from app.database import engine
+from app.file_manager_database import engine as fm_engine
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +20,11 @@ async def lifespan(app: FastAPI):
 
         await asyncio.to_thread(issuing_key)
         logger.info("Terminal issuing CA loaded; local signer ready")
-    yield
-    await engine.dispose()
+    try:
+        yield
+    finally:
+        await fm_engine.dispose()
+        await engine.dispose()
 
 
 app = FastAPI(

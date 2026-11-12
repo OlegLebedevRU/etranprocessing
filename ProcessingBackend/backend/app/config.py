@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings
 
 
@@ -11,6 +11,11 @@ class Settings(BaseSettings):
     ca_issuing_key_password: SecretStr = SecretStr("")
     ca_issuing_key_password_file: str = ""
     database_url: str = ""
+    # Per worker; FM cannot consume the payment engine's pool.
+    file_manager_db_pool_size: int = Field(default=2, ge=1, le=5)
+    file_manager_db_pool_timeout_seconds: float = Field(default=1, gt=0, le=5)
+    file_manager_db_connect_timeout_seconds: float = Field(default=3, gt=0, le=10)
+    file_manager_db_command_timeout_seconds: float = Field(default=5, gt=0, le=15)
     product_scope_split_enabled: bool = False
     cors_origins: list[str] = []
     file_manager_service_key: str = ""

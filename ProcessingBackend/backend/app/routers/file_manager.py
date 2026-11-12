@@ -10,8 +10,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database import get_db
 from app.dependencies import get_current_terminal
+from app.file_manager_database import get_fm_db as get_db
 from app.models import Terminal
 from app.schemas.file_manager import (
     AgentHello,
