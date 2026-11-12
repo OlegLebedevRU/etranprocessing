@@ -7,7 +7,8 @@
 при явном открытии терминала оператором; активность подтверждается существующим
 ACK продления файлового сеанса. Отдельный heartbeat не нужен даже в сеансе.
 
-Это принятый целевой дизайн для следующего задания, **ещё не runtime-контракт**.
+Контракт реализуется в [пакете реализации](../.agent-context/tasks/active/2026-11-12-fm-on-demand-implementation.md);
+пока это **не подтверждение нового runtime**.
 Текущий FM v2 продолжает hello15 с/TTL45 с. PB mitigation выпущен отдельно:
 [handoff](../.agent-context/tasks/active/2026-11-12-fm-db-isolation.md).
 Платежи, сертификатная выдача и существующий MQTT presence не меняются.
@@ -47,13 +48,21 @@ MQTT svc_online также не является FM readiness и не получ
 3. После создания pending MB вызывает авторизованный IoT dispatcher.
    IoT публикует probe в существующий srv/{SN}/fmc. Новый топик, RPC-код,
    MQTT-клиент или retained command не вводятся. Probe не захватывает общую lease
-   и не запускает worker, не читает каталог и не обращается к S3.
+   и не запускает файловую операцию, не читает пользовательский каталог и не
+   обращается к S3. Разрешён кратковременный изолированный metadata helper:
+   его UUID сохраняется между probe и start, idle grace ограничен30 с. Сам MQTT
+   CONNECT не создаёт helper; после stop/expiry/выхода нет idle respawn.
 4. Агент проверяет срок, policy/Leo4Proxy и доступность подсистемы. Он посылает
    в PB один mTLS HTTPS-ответ с метаданными. Неизвестный/истёкший probe не даёт
    права зарегистрироваться или продлить сеанс.
 5. PB проверяет pending UUID, terminal/tenant/current serial, срок и равенство
    UUID в header/body. Только здесь разрешается регистрация нового agent instance.
    PB атомарно сохраняет ответ и fm_agents; MQTT PUBACK не означает готовность.
+   Если локально остались receipts, агент сообщает filesystem_ready=false:
+   это регистрирует текущий экземпляр, но не создаёт доступный proof. Только
+   после принятия такого ответа выполняется ограниченная сверка receipts через
+   прежний endpoint. Новая передача запрещена до завершения восстановления;
+   следующий probe запускается только новым явным действием пользователя.
 6. MB ожидает результат максимум7 с; транспортный/доменные отказы различаются.
    Ожидание не удерживает соединение PostgreSQL. Если используется DB polling,
    он ограничен2 чтениями/с только для текущего запроса и немедленно прекращается.
@@ -122,7 +131,8 @@ payload/instance того же request_id отклоняется. После res
 ## Совместимый выпуск
 
 1. PB mitigation уже выпущен; legacy agents по-прежнему работают.
-2. Добавить PB schema/API для probe и режима, затем совместимый IoT dispatcher.
+2. Сначала выпустить MB bridge, принимающий schema034 и035. Затем добавить PB
+   schema/API для probe и режима, затем совместимый IoT dispatcher.
    Общие модели — shared, миграции — только PB; чтение других consumers совместимо.
 3. Выпустить MB/UI: никаких fleet-wide readiness polling; legacy выбранного
    терминала можно проверить единожды через старый endpoint. Включение нового
@@ -140,7 +150,7 @@ payload/instance того же request_id отклоняется. После res
 - Обновлённый idle terminal:0 FM HTTPS и0 readiness DB writes за30 мин; MQTT
   presence и другие службы продолжают работать. Agent restart не создаёт hello.
 - Открытая fleet page без выбранного терминала:0 readiness fan-out/probe за10 мин.
-- Один клик: один bounded probe только выбранного SN; no worker/no lease до
+- Один клик: один bounded probe только выбранного SN; no file operation/no lease до
   готовности. Затем обычный start и доказанный terminal ACK.
 - Active: renew ACK каждые15 с, freshness45 с;0 дополнительных hello и0 новой
   периодической очереди поверх существующего renew/status flow.
@@ -155,6 +165,7 @@ payload/instance того же request_id отклоняется. После res
 ## Задание
 
 [Точный пакет следующему агенту](../.agent-context/tasks/active/2026-11-12-fm-on-demand-agent-task.md).
-Native producer и внешний app1 в этой итерации не проверялись по исходникам;
-перед реализацией агент обязан сверить обе стороны, подписать схемы/fixtures и
-зафиксировать фактические маршруты IoT, не выдумывая их из названия use-case.
+Producer app1 и consumer L4Con сверены в пакете реализации. IoT dispatch route:
+`POST /api/internal/v1/file-manager/devices/{device_id}/readiness-probes`.
+Machine schema/fixtures: `contracts/file-manager-readiness-v1/`. Проверки кода,
+сборки, deployment и аппаратного пилота фиксируются отдельно в handoff.

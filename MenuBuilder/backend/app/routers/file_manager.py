@@ -1,5 +1,6 @@
 """Tenant BFF. Control/metadata only; file bodies never enter this router."""
 
+import asyncio
 import logging
 import math
 from datetime import UTC, datetime
@@ -61,6 +62,16 @@ class NavigationBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     path: str = Field(min_length=3, max_length=1024)
     offset: int = Field(default=0, ge=0, le=1_000_000)
+
+
+class ProbeBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    request_id: UUID
+
+
+class StartBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    readiness_probe_id: UUID | None = None
 
 
 async def fm_user(
@@ -170,13 +181,22 @@ async def readiness(
 @router.post("/devices/{device_id}/sessions")
 async def start(
     device_id: int,
+    body: StartBody,
     x_fm_view_id: UUID = Header(),
     user: dict = Depends(fm_user),
     db: AsyncSession = Depends(get_db),
 ):
     terminal = await _verify_device_access(device_id, user, db, require_active=True)
     headers = actor(user, terminal.org_id, x_fm_view_id)
-    if not (await readiness_for(device_id, headers))["available"]:
+    # Release the portal transaction before waiting for remote systems.
+    await db.rollback()
+    if body.readiness_probe_id is not None:
+        proof = await upstream(
+            "pb", f"/readiness-probes/{body.readiness_probe_id}", headers
+        )
+        if not proof.get("available"):
+            raise HTTPException(409, detail={"code": "fm_agent_unavailable"})
+    elif not (await readiness_for(device_id, headers))["available"]:
         raise HTTPException(409, detail={"code": "fm_agent_unavailable"})
     lease = await upstream(
         "iot", f"/devices/{device_id}/sessions", headers, {"ttl_sec": 60}
@@ -184,7 +204,17 @@ async def start(
     identifier = lease["lease_id"]
     try:
         await upstream(
-            "pb", f"/devices/{device_id}/sessions", headers, {"lease_id": identifier}
+            "pb",
+            f"/devices/{device_id}/sessions",
+            headers,
+            {
+                "lease_id": identifier,
+                **(
+                    {"readiness_probe_id": str(body.readiness_probe_id)}
+                    if body.readiness_probe_id
+                    else {}
+                ),
+            },
         )
         await upstream(
             "iot", f"/sessions/{identifier}/signals", headers, {"action": "start"}
@@ -210,6 +240,52 @@ async def start(
             ) from failure
         raise
     return lease
+
+
+@router.post("/devices/{device_id}/readiness-probes")
+async def probe(
+    device_id: int,
+    body: ProbeBody,
+    x_fm_view_id: UUID = Header(),
+    user: dict = Depends(fm_user),
+    db: AsyncSession = Depends(get_db),
+):
+    terminal = await _verify_device_access(device_id, user, db, require_active=True)
+    headers = actor(user, terminal.org_id, x_fm_view_id)
+    await db.rollback()
+    legacy = await readiness_for(device_id, headers)
+    if legacy.get("available") and "fs.readiness_on_demand" not in legacy.get(
+        "capabilities", []
+    ):
+        # Compatibility is selected from the observed capabilities, never from
+        # a probe timeout. This read occurs only for the selected terminal.
+        return legacy
+    pending = await upstream(
+        "pb",
+        f"/devices/{device_id}/readiness-probes",
+        headers,
+        {"request_id": str(body.request_id)},
+    )
+    if pending.get("state") == "pending":
+        await upstream(
+            "iot",
+            f"/devices/{device_id}/readiness-probes",
+            headers,
+            {"request_id": str(body.request_id), "expires_at": pending["expires_at"]},
+        )
+    # No connection is held during this finite wait; PB calls each commit/close.
+    try:
+        async with asyncio.timeout(7):
+            for _ in range(14):
+                result = await upstream(
+                    "pb", f"/readiness-probes/{body.request_id}", headers
+                )
+                if result.get("state") != "pending":
+                    return {**result, "mqtt_available": result.get("available") is True}
+                await asyncio.sleep(0.5)
+    except TimeoutError:
+        raise HTTPException(409, detail={"code": "fm_probe_timeout"}) from None
+    raise HTTPException(409, detail={"code": "fm_probe_timeout"})
 
 
 @router.get("/devices/{device_id}/operations/{identifier}")

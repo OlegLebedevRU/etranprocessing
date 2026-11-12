@@ -3,6 +3,7 @@
 - [Файловый менеджер по требованию](etran_arch-file-manager-on-demand-readiness.md) —
   целевой lifecycle без фонового hello/fleet readiness polling, wire additions,
   совместимый rollout и задание реализации; пока не runtime-контракт.
+  Machine schema: [readiness v1](../contracts/file-manager-readiness-v1/schema.json).
 
 - [Camera adaptive quality candidate](etran_arch-camera-adaptive-quality-candidate.md) — proposed quality payload, BFF parser and explicit offline/runtime boundary.
 

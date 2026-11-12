@@ -94,6 +94,8 @@ function TenantFiles({ org, target }: { org: number; target?: number }) {
   const closing = useRef<Promise<void> | undefined>(undefined);
   const transferRef = useRef(false);
   const lifetime = useRef(new AbortController());
+  const selecting = useRef(false);
+  const probeAbort = useRef<AbortController | undefined>(undefined);
   const deadlines = useRef<Record<number, number>>({});
   const refreshDevices = useRef<() => Promise<void>>(async () => {});
 
@@ -108,6 +110,9 @@ function TenantFiles({ org, target }: { org: number; target?: number }) {
     const active = current.current;
     current.current = undefined;
     generation.current++;
+    probeAbort.current?.abort();
+    probeAbort.current = undefined;
+    if (mounted.current && active) setAvailability(old => { const next = {...old}; delete next[active.device]; return next; });
     active?.abort.abort();
     if (mounted.current) { setConnected(false); setEntries([]); setPath(""); setAddress(""); if (message) setError(message); }
     const work = async () => {
@@ -161,17 +166,7 @@ function TenantFiles({ org, target }: { org: number; target?: number }) {
         const online = target ? items.filter(item => item.device_id === target && terminals.items.some(t => t.device_id === target)) : selectableDevices(items, terminals.items).filter(item => item.status === "online");
         if (controller.signal.aborted) return;
         setDevices(online.map(item => ({ ...item, terminalAddress: terminals.items.find(terminal => terminal.device_id === item.device_id)?.address || undefined }))); setLoading(false);
-        // Bounded concurrency; readiness inspection never acquires a session.
-        let index = 0;
-        await Promise.all(Array.from({ length: Math.min(4, online.length) }, async () => {
-          while (index < online.length && !controller.signal.aborted) {
-            const id = online[index++].device_id;
-            try {
-              const value = await fmApi(id, view.current, controller.signal).readiness();
-              if (!controller.signal.aborted) setAvailability(old => ({ ...old, [id]: value }));
-            } catch { if (!controller.signal.aborted) setAvailability(old => { const next = { ...old }; delete next[id]; return next; }); }
-          }
-        }));
+        // Inventory only. FM readiness is requested exclusively by select().
       } catch { if (!controller.signal.aborted) { setError("Не удалось обновить список терминалов."); setLoading(false); } }
       finally { refreshing = false; }
     };
@@ -236,23 +231,29 @@ function TenantFiles({ org, target }: { org: number; target?: number }) {
   };
 
   const select = async (id?: number, target = "") => {
-    if (locked.current || transferRef.current) return;
+    if (locked.current || transferRef.current || selecting.current) return;
     if (id !== undefined && id === current.current?.device) { await browse(target); return; }
     if (id && (deadlines.current[id] || 0) > Date.now()) return;
+    selecting.current = true;
     setPending(true); setError(""); setNotice("");
     try {
       await close();
       if (!mounted.current) return;
       setDevice(id); setHistory([""]); setHistoryIndex(0); setSelectedFile(undefined);
       if (!id) { setPhase("Обновляем онлайн-терминалы…"); await refreshDevices.current(); if(mounted.current)setPhase(""); return; }
-      const api = fmApi(id, view.current, lifetime.current.signal);
+      const selection = generation.current;
+      const controller = new AbortController(); probeAbort.current = controller;
+      const signal = AbortSignal.any([lifetime.current.signal, controller.signal]);
+      const api = fmApi(id, view.current, signal);
       setPhase("Проверяем доступность агента…");
-      const ready = await api.readiness(); setAvailability(old => ({ ...old, [id]: ready }));
+      const ready = await api.probe(crypto.randomUUID());
+      if (!mounted.current || generation.current !== selection || signal.aborted) return;
+      setAvailability(old => ({ ...old, [id]: ready }));
       if (!ready.available) { setError(fmReason[ready.state] || "Агент недоступен"); return; }
       setPhase("Подключаемся к терминалу…");
-      const session = await api.start();
+      const session = await api.start(ready.request_id);
       const active: Active = { device: id, lease: session.lease_id, abort: new AbortController(), expiresAt: Date.now() + 90000 };
-      if (!mounted.current) { void fmApi(id, view.current).signal(session.lease_id, "stop").catch(() => {}); return; }
+      if (!mounted.current || generation.current !== selection || signal.aborted) { void fmApi(id, view.current).signal(session.lease_id, "stop").catch(() => {}); return; }
       current.current = active;
       const status = await wait(fmApi(id, view.current, active.abort.signal), active.lease, active.abort.signal, "active", 10000);
       if (current.current !== active) return;
@@ -267,7 +268,7 @@ function TenantFiles({ org, target }: { org: number; target?: number }) {
     } catch (failure) {
       if (id) rememberDrain(id, Date.now() + fmRetryAfter(failure) * 1000);
       if (mounted.current) await fail(failure);
-    } finally { setPending(false); }
+    } finally { selecting.current = false; setPending(false); }
   };
 
   const transferFile = async (kind: "upload" | "download", target: string, file?: File) => {
@@ -340,12 +341,12 @@ function TenantFiles({ org, target }: { org: number; target?: number }) {
   const treeData = [{ key: "all", title: "Обзор парка", icon: <HomeOutlined />, isLeaf: true }, ...devices.filter(item => `${item.device_id} ${item.description || ""} ${item.terminalAddress || ""}`.toLowerCase().includes(search.toLowerCase())).map(item => {
     const ready = availability[item.device_id];
     const remaining = Math.max(0, Math.ceil(((drains[item.device_id] || 0) - now) / 1000));
-    const status = remaining ? `Завершение ${remaining} с` : ready ? (fmReason[ready.state] || ready.state) : "Проверка…";
+    const status = remaining ? `Завершение ${remaining} с` : ready ? (fmReason[ready.state] || ready.state) : "Проверка при подключении";
     const usable = ready?.available && ready.compatible && ready.mqtt_available && !remaining;
     return {
       key: `t:${item.device_id}`, icon: <DesktopOutlined />, isLeaf: false,
       title: <span style={{ display: "block", maxWidth: "100%" }}>
-        <span title={status}><strong>{item.device_id}</strong> <span role="img" aria-label={status}><Badge status={usable ? "success" : remaining || !ready ? "processing" : "warning"} /></span></span>
+        <span title={status}><strong>{item.device_id}</strong> <span role="img" aria-label={status}><Badge status={usable ? "success" : remaining ? "processing" : ready ? "warning" : "default"} /></span></span>
         {item.terminalAddress && <Text type="secondary" title={item.terminalAddress} style={{ display: "block", paddingLeft: 12, fontSize: 11, lineHeight: "16px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.terminalAddress}</Text>}
         {!usable && <Text type="secondary" style={{ display: "block", fontSize: 11 }}>{status}</Text>}
       </span>,
@@ -381,7 +382,7 @@ function TenantFiles({ org, target }: { org: number; target?: number }) {
       <Col xs={24} md={{ flex: "1" }} style={{ minWidth: 0 }}>
         <Card size="small" style={{ minHeight: 520 }} title={<Breadcrumb items={crumbs} />} extra={connected && <Tag color="blue">Монопольный сеанс</Tag>}>
           <Space wrap style={{ marginBottom: 16 }}>
-            {device && !connected && <Button type="primary" disabled={navigationDisabled || !devices.some(item => item.device_id === device) || availability[device]?.available !== true} onClick={() => void select(device)}>Подключиться к терминалу {device}</Button>}
+            {device && !connected && <Button type="primary" disabled={navigationDisabled || !devices.some(item => item.device_id === device)} onClick={() => void select(device)}>Подключиться к терминалу {device}</Button>}
             <Button aria-label="Назад" icon={<ArrowLeftOutlined />} disabled={navigationDisabled || !connected || historyIndex === 0} onClick={() => void browse(history[historyIndex - 1], 0, historyIndex - 1)} />
             <Button aria-label="Вперёд" icon={<ArrowRightOutlined />} disabled={navigationDisabled || !connected || historyIndex >= history.length - 1} onClick={() => void browse(history[historyIndex + 1], 0, historyIndex + 1)} />
             <Button aria-label="Вверх" icon={<ArrowUpOutlined />} disabled={navigationDisabled || !connected || !path} onClick={() => void browse(fmParent(path, localRoots))} />

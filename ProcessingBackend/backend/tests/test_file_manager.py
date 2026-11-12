@@ -99,7 +99,7 @@ async def test_session_renew_requires_the_current_ticket_ack(monkeypatch):
         await fm.agent_result(op.id, AgentResult(state="active", grant_id=uuid4()), SimpleNamespace(), AsyncMock())
     assert "applied_expires_at" not in op.data
     from uuid import UUID
-    await fm.agent_result(op.id, AgentResult(state="active", grant_id=UUID(op.data["grant_id"])), SimpleNamespace(), AsyncMock())
+    await fm.agent_result(op.id, AgentResult(state="active", grant_id=UUID(op.data["grant_id"])), SimpleNamespace(id=1), AsyncMock())
     assert op.data["applied_expires_at"] == op.expires_at.isoformat()
 
 

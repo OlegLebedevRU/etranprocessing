@@ -1,6 +1,7 @@
 import client from "./client";
 
 export interface FmReadiness {
+  request_id?: string;
   capabilities?: string[];
   state: string; write_available?: boolean; compatible: boolean; available: boolean; mqtt_available: boolean;
   agent_version?: string; protocol_version?: number; last_seen_at?: string;
@@ -22,7 +23,8 @@ export function fmApi(device: number, view: string, signal?: AbortSignal) {
   const options = { headers: { "X-FM-View-Id": view }, signal, timeout: 10000 };
   return {
     readiness: async () => (await client.get<FmReadiness>(`${base}/readiness`, options)).data,
-    start: async () => (await client.post<{ lease_id: string; expires_at: string }>(`${base}/sessions`, {}, options)).data,
+    probe: async (request_id: string) => (await client.post<FmReadiness>(`${base}/readiness-probes`, {request_id}, {...options, timeout: 20000})).data,
+    start: async (readiness_probe_id?: string) => (await client.post<{ lease_id: string; expires_at: string }>(`${base}/sessions`, {readiness_probe_id}, options)).data,
     navigate: async (lease: string, path: string, offset = 0) =>
       (await client.post<FmOperation>(`${base}/sessions/${lease}/navigation`, {path, offset}, options)).data,
     status: async (id: string) => (await client.get<FmOperation>(`${base}/operations/${id}`, options)).data,
@@ -40,10 +42,11 @@ export function fmApi(device: number, view: string, signal?: AbortSignal) {
 }
 
 export const fmReason: Record<string,string> = {
+  unchecked: "Проверка при подключении",
   storage_unavailable: "Хранилище файлов не настроено", policy_unconfigured: "Каталоги FM не настроены",
   ready: "Агент готов", not_registered: "Агент FM ещё не зарегистрирован",
   offline: "Нет свежего ответа агента", incompatible: "Требуется обновление агента",
-  filesystem_unavailable: "Доступ к файловой системе отключён", disabled: "Терминал отключён",
+  filesystem_unavailable: "Файловая подсистема пока не готова", disabled: "Терминал отключён",
   certificate_changed: "Ожидается регистрация нового сертификата", mqtt_unavailable: "Сервис агента недоступен по MQTT",
 };
 
@@ -53,6 +56,8 @@ export function fmError(error: unknown): string {
   if (detail?.code === "lease_taken") return detail.scope === "files" ? "Терминал занят файловым менеджером или ожидает безопасного завершения предыдущего сеанса." : `Терминал занят: ${detail.scope === "console" ? "консоль" : "видео или удалённое управление"}. Завершите другой сеанс.`;
   if (detail?.code === "fm_commit_outcome_unknown" || detail?.code === "fm_transfer_busy_or_commit_unknown") return "Результат записи пока неизвестен. Проверьте файл после восстановления связи.";
   const code = detail?.code || (error instanceof Error ? error.message : "");
+  if (code === "fm_probe_timeout") return "Агент не ответил на проверку готовности. Проверьте связь и версию L4Con, затем повторите вручную.";
+  if (code === "fm_probe_busy") return "Проверка терминала уже выполняется. Повторите после её завершения.";
   if (["fm_path_denied", "fm_path_or_session_failed", "fm_control_or_path_failed"].includes(code)) return "Не удалось открыть путь или подтвердить операцию на терминале. Сеанс завершается; проверьте доступность каталога и права пользователя.";
   if (code === "fm_user_unavailable") return "На терминале нет доступного обычного пользователя рабочего стола.";
   if (code === "fm_ack_timeout") return "Агент не подтвердил выполнение вовремя. Операция остановлена, сеанс завершается.";

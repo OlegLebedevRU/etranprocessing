@@ -102,6 +102,9 @@ app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(camera_credential_recipient.router)
 app.include_router(file_manager.agent_router)
 app.include_router(file_manager.internal_router)
+from app.routers.file_manager_probe import router as fm_probe_router
+
+app.include_router(fm_probe_router)
 app.include_router(leo4proxy.router, prefix="/api/leo4proxy", tags=["leo4proxy"])
 app.include_router(
     licensebilling.router, prefix="/api/licensebilling", tags=["licensebilling"]

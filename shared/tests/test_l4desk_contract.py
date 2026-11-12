@@ -168,7 +168,7 @@ def test_published_schema_matches_models():
     importlib.import_module("etranprocessing_db.file_manager")
     importlib.import_module("etranprocessing_db.inventory")
     importlib.import_module("etranprocessing_db.camera_credentials")
-    path = HERE.parent / "docs" / "l4desk" / "schema-v034.json"
+    path = HERE.parent / "docs" / "l4desk" / "schema-v035.json"
     assert describe_metadata(Base.metadata) == json.loads(
         path.read_text(encoding="utf-8")
     )

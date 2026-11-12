@@ -132,7 +132,7 @@ def test_startup_error_on_wrong_revision(revision):
         sync_engine.connect() as conn,
         pytest.raises(
             SchemaCompatibilityError,
-            match=r"Database schema revision mismatch: expected one of \['034'\]",
+            match=r"Database schema revision mismatch: expected one of \['034', '035'\]",
         ),
     ):
         check_schema_compatibility_sync(conn)

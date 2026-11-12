@@ -1,10 +1,11 @@
-"""Digest-only PB rollout preserving all current Compose overlays and runtime policy.
+"""Scoped FM server rollout preserving all current Compose overlays and runtime policy.
 
 Run alongside this revision's .github/ci/deploy.py and components.py. Never prints
-environment values. Only processing-backend is recreated; rollback keeps policy.
+environment values. Only the chosen service is recreated; rollback keeps policy.
 """
 
 import argparse
+import importlib
 import json
 import os
 import sys
@@ -32,12 +33,21 @@ def main():
     parser.add_argument("--revision", required=True)
     parser.add_argument("--digest", required=True)
     parser.add_argument("--expected-container", required=True)
+    parser.add_argument(
+        "--component",
+        choices=("processingbackend", "menubuilder-backend", "app1"),
+        default="processingbackend",
+    )
+    parser.add_argument("--migrate", action="store_true")
     args = parser.parse_args()
     sys.path.insert(0, str(args.ci_dir))
-    import deploy as release
+    release = importlib.import_module("deploy")
 
     os.umask(0o077)
-    image = release.image_reference("processingbackend", args.revision, args.digest)
+    if args.migrate and args.component != "processingbackend":
+        raise ValueError("Only PB owns shared migrations")
+    image = release.image_reference(args.component, args.revision, args.digest)
+    service = release.DEPLOY_COMPONENTS[args.component]["service"]
     release.preflight()
     with (release.STATE / "deploy.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -50,10 +60,10 @@ def main():
             return {
                 obj["Name"]: obj["Id"]
                 for obj in json.loads(release.docker("inspect", *ids, capture=True))
-                if obj["Name"] != "/processing-backend"
+                if obj["Name"] != "/" + service
             }
 
-        before = inspect("processing-backend")
+        before = inspect(service)
         if before["Id"] != args.expected_container:
             raise RuntimeError("Concurrent PB replacement")
         previous_neighbors = neighbors()
@@ -61,7 +71,7 @@ def main():
         image_obj = json.loads(release.docker("image", "inspect", image, capture=True))[0]
         if image_obj["Config"]["Labels"]["org.opencontainers.image.revision"] != args.revision:
             raise RuntimeError("Image revision mismatch")
-        directory = release.STATE / "runs" / "fm-isolation" / args.revision
+        directory = release.STATE / "runs" / "fm-on-demand" / args.revision / args.component
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         forward, rollback = directory / "images.json", directory / "rollback.json"
         # Preserve existing literal dollars against Compose interpolation.
@@ -75,7 +85,7 @@ def main():
                 path,
                 {
                     "services": {
-                        "processing-backend": {
+                        service: {
                             "image": reference,
                             "environment": escaped,
                         }
@@ -84,12 +94,25 @@ def main():
             )
         command = compose(before, forward)
         rendered = json.loads(release.run(*command, "config", "--format", "json", capture=True))
-        values = rendered["services"]["processing-backend"].get("environment", {})
+        values = rendered["services"][service].get("environment", {})
         defaults = dict(item.split("=", 1) for item in image_obj["Config"].get("Env", []))
         check_environment(environment(before), values, defaults, {})
-        # This release has no schema changes; check current/head before invocation.
-        if inspect("processing-backend")["Id"] != args.expected_container:
+        if inspect(service)["Id"] != args.expected_container:
             raise RuntimeError("Concurrent PB replacement before rollout")
+        if args.migrate:
+            # Deploy the MB034/035 bridge before invoking this option. Image
+            # rollback never downgrades this additive schema.
+            release.run(
+                *command,
+                "run",
+                "--rm",
+                "--no-deps",
+                "--entrypoint",
+                "alembic",
+                service,
+                "upgrade",
+                "head",
+            )
         try:
             release.run(
                 *command,
@@ -99,10 +122,10 @@ def main():
                 "--no-build",
                 "--pull",
                 "never",
-                "processing-backend",
+                service,
             )
-            release.wait_healthy("processingbackend", "processing-backend")
-            verify_runtime(before, inspect("processing-backend"), image_obj["Id"])
+            release.wait_healthy(args.component, service)
+            verify_runtime(before, inspect(service), image_obj["Id"])
             if neighbors() != previous_neighbors:
                 raise RuntimeError("Neighbor containers changed")
         except Exception:
@@ -114,10 +137,10 @@ def main():
                 "--no-build",
                 "--pull",
                 "never",
-                "processing-backend",
+                service,
             )
-            release.wait_healthy("processingbackend", "processing-backend")
-            verify_runtime(before, inspect("processing-backend"), before["Image"])
+            release.wait_healthy(args.component, service)
+            verify_runtime(before, inspect(service), before["Image"])
             raise
         release.atomic_json(
             directory / "verified.json",
@@ -125,13 +148,14 @@ def main():
                 "revision": args.revision,
                 "image": image,
                 "previous_image": before["Config"]["Image"],
-                "container": inspect("processing-backend")["Id"],
+                "container": inspect(service)["Id"],
+                "component": args.component,
                 "environment_unchanged": True,
                 "mounts_unchanged": True,
                 "neighbors_unchanged": True,
             },
         )
-        print("Verified PB revision=" + args.revision + " image=" + image)
+        print("Verified " + args.component + " revision=" + args.revision + " image=" + image)
 
 
 if __name__ == "__main__":

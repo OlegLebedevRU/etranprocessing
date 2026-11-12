@@ -13,10 +13,10 @@ ROOT = Path(__file__).parents[1]
 
 
 def test_source_package_provenance():
-    for name in ("package-source-v034.json", "schema-v034.json", "schema-v034.md"):
+    for name in ("package-source-v035.json", "schema-v035.json", "schema-v035.md"):
         assert b"\r\n" not in (ROOT / "docs" / "l4desk" / name).read_bytes()
     manifest = json.loads(
-        (ROOT / "docs" / "l4desk" / "package-source-v034.json").read_text(
+        (ROOT / "docs" / "l4desk" / "package-source-v035.json").read_text(
             encoding="utf-8"
         )
     )
@@ -86,9 +86,10 @@ from sqlalchemy.orm import configure_mappers
 configure_mappers()
 assert len(etranprocessing_db.Base.metadata.tables) == 54
 from etranprocessing_db import file_manager
-assert len(etranprocessing_db.Base.metadata.tables) == 56
+assert len(etranprocessing_db.Base.metadata.tables) == 57
+assert "fm_readiness_probes" in etranprocessing_db.Base.metadata.tables
 from etranprocessing_db import camera_credentials
-assert len(etranprocessing_db.Base.metadata.tables) == 58
+assert len(etranprocessing_db.Base.metadata.tables) == 59
 assert len(l4desk.__all__) == 23
 print(json.dumps(sorted(etranprocessing_db.Base.metadata.tables)))
 """

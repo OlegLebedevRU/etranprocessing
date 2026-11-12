@@ -113,7 +113,7 @@ def test_alembic_linear_history():
     script = ScriptDirectory.from_config(config)
 
     heads = script.get_heads()
-    assert heads == ["034"], f"Expected single head '034', got {heads}"
+    assert heads == ["035"], f"Expected single head '035', got {heads}"
     rev_034 = script.get_revision("034")
     assert rev_034 is not None and rev_034.down_revision == "033"
     rev_032 = script.get_revision("032")

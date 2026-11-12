@@ -1,0 +1,5 @@
+{
+  "command": {"v":2,"action":"probe","command_id":"33333333-3333-4333-8333-333333333333","expires_at":2400000000},
+  "success": {"request_id":"33333333-3333-4333-8333-333333333333","agent_instance_id":"44444444-4444-4444-8444-444444444444","agent_version":"1.12.5","protocol_version":2,"capabilities":["fs.session","fs.list","fs.read","fs.write","fs.cancel","fs.proxy","fs.mqtt_navigation","fs.write_user","fs.drives","fs.readiness_on_demand"],"filesystem_ready":true,"readiness_mode":"on_demand_v1"},
+  "failure": {"request_id":"33333333-3333-4333-8333-333333333333","agent_instance_id":"44444444-4444-4444-8444-444444444444","error_code":"fm_user_unavailable"}
+}

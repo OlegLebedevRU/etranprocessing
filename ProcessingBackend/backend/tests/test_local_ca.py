@@ -241,6 +241,8 @@ async def test_fm_registration_uses_verified_chain_not_immediate_issuer_name(
     lookup = AsyncMock(return_value=terminal)
     monkeypatch.setattr(fm, "get_current_terminal", lookup)
     db = AsyncMock()
+    db.scalar.return_value = terminal
+    db.get.return_value = None
     if mode == "untrusted":
         with pytest.raises(HTTPException) as error:
             await fm.fm_terminal(request, db)

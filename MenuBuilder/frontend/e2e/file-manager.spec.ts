@@ -16,6 +16,7 @@ async function portal(page: Page, profile: "classic" | "l4desk", available = tru
     if (path === "/api/settings/terminals") data = { items: fixtures.map(id => ({ id, device_id: id, sn: `fixture${id}`, is_active: true, address: "ул. Тестовая, 15, помещение 10" })), total_count: 2 };
     if (path.includes("/internal/v1/devices")) data = { items: fixtures.map(id => ({ id, device_id: id, sn: `fixture${id}`, device_tags: [], connection: { device_id: id, last_checked_result: true, svc_connect: true, is_svc_available: true } })), pages: 1, total: 2 };
     if (path.endsWith("/readiness")) data = { state: available ? "ready" : "incompatible", available, compatible: available, mqtt_available: true, write_available: true, capabilities: ["fs.mqtt_navigation", "fs.write_user"], server_time: new Date().toISOString(), valid_until: new Date(Date.now() + 45000).toISOString(), missing_capabilities: [] };
+    if (path.endsWith("/readiness-probes")) data = { request_id: body.request_id, state: available ? "ready" : "incompatible", available, compatible: available, mqtt_available: true, write_available: true, capabilities: ["fs.readiness_on_demand"], server_time: new Date().toISOString(), missing_capabilities: [] };
     if (path.endsWith("/sessions") && request.method() === "POST") {
       if (conflict) { await route.fulfill({ status: 409, json: { detail: { code: "lease_taken", scope: "console" } } }); return; }
       data = { lease_id: lease(path.split("/").at(-2)!), expires_at: new Date(Date.now() + 60000).toISOString() };
@@ -61,7 +62,26 @@ test("incompatible agent is inspected without acquiring a lease", async ({ page 
   const calls = await portal(page, "classic", false);
   await page.getByRole("tree").getByText("10", { exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Требуется обновление агента");
-  expect(calls.some(call => call.method === "POST")).toBe(false);
+  expect(calls.filter(call => call.path.endsWith("/readiness-probes"))).toHaveLength(1);
+  expect(calls.some(call => call.path.endsWith("/sessions") && call.method === "POST")).toBe(false);
+});
+
+test("idle fleet has no readiness fan-out over ten minutes", async ({ page }) => {
+  await page.clock.install();
+  const calls = await portal(page, "l4desk");
+  await page.clock.fastForward("10:00");
+  expect(calls.filter(call => /readiness|sessions|operations/.test(call.path))).toHaveLength(0);
+});
+
+test("explicit selection probes only its terminal and binds proof to start", async ({ page }) => {
+  const calls = await portal(page, "classic");
+  await openDisk(page, 10);
+  const probes = calls.filter(call => call.path.endsWith("/readiness-probes"));
+  expect(probes).toHaveLength(1);
+  expect(probes[0].path).toContain("/devices/10/");
+  const start = calls.find(call => call.path.endsWith("/sessions") && call.method === "POST")!;
+  expect(start.body.readiness_probe_id).toBe(probes[0].body.request_id);
+  expect(calls.some(call => call.path.endsWith("/readiness"))).toBe(false);
 });
 
 test("console conflict never creates a file operation", async ({ page }) => {

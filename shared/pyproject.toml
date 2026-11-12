@@ -1,6 +1,6 @@
 [project]
 name = "etranprocessing-db"
-version = "0.1.1"
+version = "0.1.2"
 description = "Shared SQLAlchemy ORM models and DeclarativeBase for etranprocessing"
 requires-python = "==3.14.*"
 dependencies = [
@@ -33,6 +33,8 @@ include = [
     "/docs/l4desk/schema-v033.md",
     "/docs/l4desk/schema-v034.json",
     "/docs/l4desk/schema-v034.md",
+    "/docs/l4desk/schema-v035.json",
+    "/docs/l4desk/schema-v035.md",
 ]
 
 [dependency-groups]
