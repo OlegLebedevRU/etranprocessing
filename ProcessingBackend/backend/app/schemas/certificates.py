@@ -37,6 +37,13 @@ class RenewalEnrollRequest(BaseModel):
     tosign: str = Field(default="", max_length=2048)
 
 
+class CertificateConfirmRequest(BaseModel):
+    """Proof of current-leaf possession only; never carries enrollment secrets."""
+
+    model_config = ConfigDict(extra="forbid")
+    function: Literal["confirm"]
+
+
 class IssueCertificatePinRequest(BaseModel):
     """Request payload to idempotently issue a one-time certificate PIN."""
 

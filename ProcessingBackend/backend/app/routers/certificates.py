@@ -11,18 +11,20 @@ import asyncio
 import base64
 import hashlib
 import os
+import urllib.parse
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.utils import int_to_bytes
 from cryptography.x509.oid import NameOID
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import exists, select, text, update
 from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import JSONResponse
 
 from app.config import settings
 from app.database import get_db
@@ -37,6 +39,7 @@ from app.models import (
     TerminalCertHistory,
 )
 from app.schemas.certificates import (
+    CertificateConfirmRequest,
     IssueCertificatePinRequest,
     IssueCertificatePinResponse,
     RenewalEnrollRequest,
@@ -49,6 +52,7 @@ from app.services.cert_billing import (
     generate_unique_pin,
     mask_pin,
 )
+from app.services.cert_discovery import record_terminal_discovery
 from app.services.certificate_permission import validate_pin_permission
 from app.services.csr_signature import valid_terminal_csr_signature
 from app.services.leo4proxy_policy import subscription_allowance
@@ -160,7 +164,7 @@ async def _find_terminal_by_pin(
     for_update: bool = False,
     purpose: str = "setup",
     include_used: bool = False,
-) -> Row[Terminal, CertificatePin] | None:
+) -> Row[tuple[Terminal, CertificatePin]] | None:
     """Look up terminal via certificate_pins table. Returns (terminal, pin_row) or None.
 
     Lazily expires a `pending` PIN whose TTL has passed (marks it `expired` and
@@ -249,10 +253,14 @@ async def _verify_renewal_owner(
 
 @router.post("/renew")
 async def renew_certificate(
-    payload: RenewalEnrollRequest, request: Request, db: AsyncSession = Depends(get_db)
+    payload: RenewalEnrollRequest | CertificateConfirmRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
 ) -> Response:
     identity = _renewal_identity(request)
     async with asyncio.timeout(60):
+        if isinstance(payload, CertificateConfirmRequest):
+            return await _confirm_current_certificate(request, identity, db)
         params = {
             "pin": payload.pin,
             "cpserial": payload.cpserial,
@@ -264,6 +272,57 @@ async def renew_certificate(
         if not payload.csr:
             raise HTTPException(422, "csr_required")
         return await _handle_setup(params, request, db, identity, payload.csr.encode())
+
+
+async def _confirm_current_certificate(
+    request: Request, identity: tuple[str, str], db: AsyncSession
+) -> Response:
+    """Identity was verified against the pinned CA and TLS possession ingress."""
+    sn = identity[0]
+    terminal = await db.scalar(
+        select(Terminal).where(Terminal.sn == sn).with_for_update(of=Terminal)
+    )
+    if terminal is None:
+        raise HTTPException(401, "renewal_identity_mismatch")
+    await _verify_renewal_owner(terminal, identity, db)
+    cert = x509.load_pem_x509_certificate(
+        urllib.parse.unquote(request.headers["X-SSL-Client-Cert"]).encode()
+    )
+    for oid, expected in (
+        (NameOID.ORGANIZATION_NAME, str(terminal.org_id)),
+        (NameOID.ORGANIZATIONAL_UNIT_NAME, str(terminal.device_id)),
+    ):
+        values = cert.subject.get_attributes_for_oid(oid)
+        if len(values) != 1 or str(values[0].value) != expected:
+            raise HTTPException(401, "renewal_identity_mismatch")
+    # Capture values before the accumulator's commit. Confirmation never mutates
+    # issuance, PIN, key, current serial or RPC lifecycle.
+    device_id = str(terminal.device_id)
+    observed = await record_terminal_discovery(
+        db,
+        sn=sn,
+        cert_serial=terminal.cert_serial,
+        cert_dn=cert.subject.rfc4514_string(),
+        ou=device_id,
+        o=str(terminal.org_id),
+        is_valid=True,
+        validation_status="authenticated",
+        terminal_id=terminal.id,
+        db_cert_serial=terminal.cert_serial,
+        endpoint="/api/certificates/renew",
+        client_ip=request.client.host if request.client else None,
+    )
+    if observed is None:
+        raise HTTPException(503, "certificate_confirmation_unavailable")
+    return JSONResponse(
+        {
+            "confirmed": True,
+            "sn": sn,
+            "device_id": device_id,
+            "fingerprint_sha256": cert.fingerprint(hashes.SHA256()).hex(),
+        },
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 async def _unconfirmed_renewal(

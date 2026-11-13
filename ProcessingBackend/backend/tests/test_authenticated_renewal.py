@@ -45,12 +45,27 @@ def anyio_backend():
     return "asyncio"
 
 
-def identity_headers(*, expired=False, issuer="iot.leo4.ru", sn=SN, serial=SERIAL):
+def identity_headers(
+    *,
+    expired=False,
+    issuer="iot.leo4.ru",
+    sn=SN,
+    serial=SERIAL,
+    org_id=None,
+    device_id=None,
+):
     key = rsa.generate_private_key(65537, 2048)
     now = datetime.now(UTC)
+    attributes = [x509.NameAttribute(NameOID.COMMON_NAME, sn)]
+    if org_id is not None:
+        attributes.append(x509.NameAttribute(NameOID.ORGANIZATION_NAME, org_id))
+    if device_id is not None:
+        attributes.append(
+            x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, device_id)
+        )
     cert = (
         x509.CertificateBuilder()
-        .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, sn)]))
+        .subject_name(x509.Name(attributes))
         .issuer_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, issuer)]))
         .public_key(key.public_key())
         .serial_number(int(serial, 16))
