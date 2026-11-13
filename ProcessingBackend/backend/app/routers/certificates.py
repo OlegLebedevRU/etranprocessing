@@ -22,7 +22,6 @@ from cryptography.utils import int_to_bytes
 from cryptography.x509.oid import NameOID
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import exists, select, text, update
-from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import JSONResponse
 
@@ -164,7 +163,7 @@ async def _find_terminal_by_pin(
     for_update: bool = False,
     purpose: str = "setup",
     include_used: bool = False,
-) -> Row[tuple[Terminal, CertificatePin]] | None:
+) -> tuple[Terminal, CertificatePin] | None:
     """Look up terminal via certificate_pins table. Returns (terminal, pin_row) or None.
 
     Lazily expires a `pending` PIN whose TTL has passed (marks it `expired` and
@@ -199,7 +198,7 @@ async def _find_terminal_by_pin(
         cert_logger.info("PIN expired: pin=%s", mask_pin(pin))
         return None
 
-    return row
+    return _terminal, cert_pin
 
 
 def _parse_ca_datetime(value: str) -> datetime | None:
