@@ -1,5 +1,7 @@
 # Смена идентичности устройства — source handoff, 2026-11-16
 
+> Выпуск завершён 2026-11-16. Актуальное production evidence: [release](../completed/2026-11-16-identity-change-release.md). Ниже сохранён исходный source handoff.
+
 ## Intake и владельцы
 Сквозная реализация MB UI/API → PB check/setup → IoT dedicated transfer.
 PB владеет issuance, cert_serial и Alembic036; shared содержит только ORM.
