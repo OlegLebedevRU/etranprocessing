@@ -382,6 +382,8 @@ class AdminTerminalUpdate(BaseModel):
 
 
 class GeneratePinResponse(BaseModel):
+    certificate_org_id: int | None = None
+    identity_change_operation_id: str | None = None
     pin: str
     terminal_id: int
     device_id: int

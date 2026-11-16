@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     file_manager_db_pool_timeout_seconds: float = Field(default=1, gt=0, le=5)
     file_manager_db_connect_timeout_seconds: float = Field(default=3, gt=0, le=10)
     file_manager_db_command_timeout_seconds: float = Field(default=5, gt=0, le=15)
+    identity_change_iot_url: str = ""
+    identity_change_iot_key: str = ""
     product_scope_split_enabled: bool = False
     cors_origins: list[str] = []
     file_manager_service_key: str = ""

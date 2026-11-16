@@ -1,5 +1,7 @@
 # Shared DB: etranprocessing_db
 
+> 2026-11-16, source only: реализована смена идентичности Classic → Classic со стабильным SN, события SU и изоляция истории. Проверки и порядок выпуска: [handoff](../tasks/active/2026-11-16-identity-change.md). Production не проверен/не изменён.
+
 ## Camera vault034, 2026-10-23 — source only, not deployed
 
 PB owns migration034 and verified public recipient column. MB owns declarative

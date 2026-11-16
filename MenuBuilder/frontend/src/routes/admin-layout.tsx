@@ -1,10 +1,13 @@
 import { useNavigate } from "react-router";
 import { AuditOutlined, BankOutlined, DesktopOutlined, UserOutlined } from "@ant-design/icons";
-import { Button, Result, Spin } from "antd";
+import { Badge, Button, Result, Spin } from "antd";
 import SectionLayout from "../components/SectionLayout";
 import { useSession } from "../session/SessionContext";
 
+import { useAdminDeviceEvents } from "../components/AdminDeviceEventsContext";
+
 const ADMIN_NAV_ITEMS = [
+  { key: "device-events", icon: <AuditOutlined />, label: "События устройств" },
   {
     key: "organizations",
     icon: <BankOutlined />,
@@ -29,6 +32,7 @@ const ADMIN_NAV_ITEMS = [
 
 export default function AdminLayout() {
   const navigate = useNavigate();
+  const { count } = useAdminDeviceEvents();
   const { user, loading } = useSession();
   const isSuperuser = Boolean(user?.is_superuser);
 
@@ -58,7 +62,7 @@ export default function AdminLayout() {
   return (
     <SectionLayout
       title="Администрирование"
-      items={ADMIN_NAV_ITEMS}
+      items={ADMIN_NAV_ITEMS.map(item => item.key === "device-events" ? { ...item, label: <span>События устройств <Badge count={count} overflowCount={99} size="small" /></span> } : item)}
       resolvePath={(key) => `/admin/${key}`}
       resolveKey={(pathname) => pathname.split("/")[2] || "organizations"}
     />

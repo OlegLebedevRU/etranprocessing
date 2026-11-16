@@ -1,5 +1,7 @@
 # app1 / iot-rpc-rest-app: внешняя граница
 
+> 2026-11-16, source only: реализована смена идентичности Classic → Classic со стабильным SN, события SU и изоляция истории. Проверки и порядок выпуска: [handoff](../tasks/active/2026-11-16-identity-change.md). Production не проверен/не изменён.
+
 ## Camera4623 runtime recovery — deployed2026-11-10
 
 IoT master179872f deployed to app1/camera-runtime: dedicated bounded DB pool,

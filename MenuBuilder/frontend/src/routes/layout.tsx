@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router";
-import { Layout, Menu, Button, Tooltip, Typography, theme, Grid } from "antd";
+import { Badge, Layout, Menu, Button, Tooltip, Typography, theme, Grid } from "antd";
 import {
   AppstoreOutlined,
   DashboardOutlined,
@@ -33,6 +33,8 @@ import {
   hasPermission,
 } from "../utils/permissions";
 
+import { AdminDeviceEventsProvider, useAdminDeviceEvents } from "../components/AdminDeviceEventsContext";
+
 const { Sider, Header, Content } = Layout;
 const { Text } = Typography;
 
@@ -59,6 +61,12 @@ const L4DESK_NAV_ITEMS = [
 ];
 
 export default function AppLayout() {
+  const { user } = useSession();
+  return <AdminDeviceEventsProvider key={String(user?.username ?? "anonymous")} enabled={Boolean(user?.is_superuser)}><AppLayoutBody /></AdminDeviceEventsProvider>;
+}
+
+function AppLayoutBody() {
+  const { count: newDeviceEvents } = useAdminDeviceEvents();
   const [collapsed, setCollapsed] = useState(() => ["video", "cameras"].includes(window.location.pathname.split("/")[1]));
   const { user, setUser } = useSession();
   const currentUser = user;
@@ -158,6 +166,10 @@ export default function AppLayout() {
     }
   }
 
+  if (isSuperuser && !navItems.some(item => item.key === "admin")) {
+    navItems.push({ key: "admin", icon: <ControlOutlined />, label: "Администрирование" });
+  }
+
   navItems = navItems.filter(item => item.key !== "monitoring" || hasPermission(currentUser, PERMISSION_MONITORING_VIEW));
   if (hasPermission(currentUser, PERMISSION_VIDEO_VIEW)) {
     const index = navItems.findIndex(item => item.key === "video");
@@ -248,7 +260,7 @@ export default function AppLayout() {
               navigate(`/${key}`);
             }
           }}
-          items={navItems}
+          items={navItems.map(item => item.key === "admin" ? { ...item, icon: <Badge count={newDeviceEvents} overflowCount={99} size="small"><ControlOutlined /></Badge> } : item)}
           style={{ borderInlineEnd: "none", paddingInline: 6 }}
         />
       </Sider>

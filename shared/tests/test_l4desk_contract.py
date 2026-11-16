@@ -45,6 +45,26 @@ def test_expand_does_not_modify_existing_tables():
             ] == expected["columns"]
             assert current[name]["indexes"] == expected["indexes"]
             assert "ck_certificate_pins_purpose" in current[name]["ddl"]
+        elif name == "balance_terminal_tsp":
+            assert current[name]["columns"] == expected["columns"]
+            indexes = current[name]["indexes"]
+            assert [
+                index
+                for index in indexes
+                if "uq_balance_day_terminal_tsp_ver" not in index
+            ] == expected["indexes"]
+            unique = next(
+                index for index in indexes if "uq_balance_day_terminal_tsp_ver" in index
+            )
+            assert (
+                "int_day, org_id, terminal_id, tsp_id, coalesce(menu_version, 0)"
+                in unique
+            )
+            assert current[name]["ddl"] == "\n".join(
+                line
+                for line in expected["ddl"].split("\n")
+                if "CONSTRAINT uq_balance_day_terminal_tsp_ver" not in line
+            )
         elif name == "terminals":
             assert [
                 c
@@ -77,7 +97,13 @@ def test_all_new_models_have_keys_and_named_financial_metadata():
         for name, table in Base.metadata.tables.items()
         if name not in BASELINE
         and not name.startswith(
-            ("fm_", "terminal_tools_inventory", "camera_credential_")
+            (
+                "fm_",
+                "terminal_tools_inventory",
+                "camera_credential_",
+                "terminal_identity_",
+                "device_admin_",
+            )
         )
     ]
     assert len(tables) >= 22
@@ -132,6 +158,7 @@ def test_model_modules_are_declarative_only():
         "models/l4desk.py",
         "models/finance.py",
         "models/iot.py",
+        "models/device_events.py",
     ):
         tree = ast.parse((package / name).read_text(encoding="utf-8"))
         assert not any(
@@ -168,7 +195,8 @@ def test_published_schema_matches_models():
     importlib.import_module("etranprocessing_db.file_manager")
     importlib.import_module("etranprocessing_db.inventory")
     importlib.import_module("etranprocessing_db.camera_credentials")
-    path = HERE.parent / "docs" / "l4desk" / "schema-v035.json"
+    importlib.import_module("etranprocessing_db.models.device_events")
+    path = HERE.parent / "docs" / "l4desk" / "schema-v036.json"
     assert describe_metadata(Base.metadata) == json.loads(
         path.read_text(encoding="utf-8")
     )

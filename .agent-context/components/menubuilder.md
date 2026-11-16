@@ -1,5 +1,7 @@
 # MenuBuilder
 
+> 2026-11-16, source only: реализована смена идентичности Classic → Classic со стабильным SN, события SU и изоляция истории. Проверки и порядок выпуска: [handoff](../tasks/active/2026-11-16-identity-change.md). Production не проверен/не изменён.
+
 ## Payment report parameters — deployed2026-11-10
 
 Optional all/card/cash filter, dynamic CSV parameter columns and PB UTF-8/CP1251

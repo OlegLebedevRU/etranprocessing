@@ -1,5 +1,20 @@
 # Changelog — ProcessingBackend
 
+## Unreleased — terminal identity change and device events
+
+### Added
+
+- Additive036 operation history and deduplicated superuser device incidents.
+- PIN-directed target DN/CSR validation, setup-time owner switch and durable
+  same-CSR recovery; explicit IoT sync with administrator retry after failure.
+
+### Fixed
+
+- Previous-tenant certificates create actionable incidents in rejected auth;
+  legacy CN fallback cannot bypass a numeric tenant mismatch. Successful auth
+  has no additional identity-change query or fleet/device polling.
+
+
 ## Unreleased — demand-driven file manager
 
 ### Added

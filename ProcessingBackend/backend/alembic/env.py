@@ -6,6 +6,7 @@ from logging.config import fileConfig
 with contextlib.suppress(ImportError):
     import etranprocessing_db.l4desk  # noqa: F401
 
+from etranprocessing_db.models.device_events import DeviceAdminEvent, TerminalIdentityChange  # noqa: F401
 from etranprocessing_db.base import Base
 from etranprocessing_db.camera_credentials import (  # noqa: F401
     CameraCredentialProfile,

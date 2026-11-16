@@ -360,3 +360,14 @@ Presence и текущие console RPC сохраняются.
 5. **Таймауты и отмена**:
    * По истечении `ttl_sec` процесс гарантированно уничтожается с деревом дочерних процессов (`taskkill /F /T`), возвращая `exit_code: 124`.
    * При получении `7002` процесс прерывается с `exit_code: 130`.
+
+
+## Stable-SN tenant identity change (source candidate)
+
+The dedicated IoT identity-transfer operation serializes against owner-binding
+locks in lease/durable-session acquisition. Before changing DeviceOrgBind it
+revokes the existing lease and uses the established stop_session lifecycle for
+old console/video sessions. No new MQTT topic or method is introduced. Teardown
+failure keeps the old IoT owner and is returned to PB as an actionable sync error;
+PB's issued certificate identity is not silently rolled back. Retry is UUID- and
+payload-bound. Actual device/broker acceptance must be checked during rollout.

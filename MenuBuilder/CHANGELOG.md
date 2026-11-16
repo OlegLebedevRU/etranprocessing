@@ -1,5 +1,20 @@
 # Changelog — MenuBuilder
 
+## Unreleased — terminal identity change and device events
+
+### Added
+
+- Superuser-only stable-SN Classic → Classic identity-change action with pending
+  cancellation, PIN issuance and exact-operation IoT sync retry.
+- Device incident inbox with explicit status/comment handling and new-event
+  badges in Administration and Device Events; shared browser-only count polling.
+
+### Changed
+
+- Generic terminal editing no longer changes tenant directly. Schema gate accepts
+  additive036; source payment history stays with the original tenant.
+
+
 ## Unreleased — demand-driven file manager
 
 ### Changed

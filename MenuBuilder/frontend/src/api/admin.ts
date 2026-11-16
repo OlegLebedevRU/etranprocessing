@@ -165,6 +165,8 @@ export interface AdminTerminalUpdateInput {
 }
 
 export interface GeneratePinResponse {
+  certificate_org_id?: number | null;
+  identity_change_operation_id?: string | null;
   pin: string;
   terminal_id: number;
   device_id: number;
@@ -237,6 +239,7 @@ export async function getNextDeviceId(): Promise<{ next_device_id: number }> {
 }
 
 export async function getAdminTerminals(params?: {
+  terminal_id?: number;
   org_id?: number;
   search?: string;
   is_active?: boolean;

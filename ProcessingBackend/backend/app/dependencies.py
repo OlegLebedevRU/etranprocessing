@@ -334,9 +334,20 @@ async def get_current_terminal(
         res_diag = await db.execute(select(Terminal).where(Terminal.sn == cn))
         db_term = res_diag.scalar_one_or_none()
         if db_term:
+            from sqlalchemy.exc import SQLAlchemyError
+
+            from app.services.identity_change import record_old_certificate
+
             val_status = "serial_mismatch"
             term_id = db_term.id
             db_serial = db_term.cert_serial
+            try:
+                await record_old_certificate(db, db_term, cert_serial)
+            except SQLAlchemyError:
+                await db.rollback()
+                logger.exception(
+                    "Cannot persist old-certificate incident for terminal %s", term_id
+                )
         else:
             val_status = "terminal_not_found"
             term_id = None
@@ -386,6 +397,38 @@ async def get_current_terminal(
 
     if matched_terminal:
         terminal = matched_terminal
+        # A CN fallback must not carry the previous tenant's certificate into a
+        # new owner. This adds no database lookup to successful legacy requests.
+        if o and o.isdigit() and int(o) != terminal.org_id:
+            from sqlalchemy.exc import SQLAlchemyError
+
+            from app.services.identity_change import record_old_certificate
+
+            rejected_terminal_id = terminal.id
+            rejected_serial = terminal.cert_serial
+            try:
+                await record_old_certificate(db, terminal, cert_serial)
+            except SQLAlchemyError:
+                await db.rollback()
+                logger.exception(
+                    "Cannot persist old-certificate incident for terminal %s",
+                    rejected_terminal_id,
+                )
+            await record_terminal_discovery(
+                db,
+                sn=cn,
+                cert_serial=cert_serial,
+                cert_dn=subject,
+                ou=ou or None,
+                o=o,
+                is_valid=False,
+                validation_status="tenant_mismatch",
+                terminal_id=rejected_terminal_id,
+                db_cert_serial=rejected_serial,
+                endpoint=endpoint,
+                client_ip=client_ip,
+            )
+            raise HTTPException(401, "Terminal auth failed (tenant_mismatch)")
         cert_not_valid_after = extract_cert_not_valid_after(request) or auth_not_after
         if (
             cert_not_valid_after

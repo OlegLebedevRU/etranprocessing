@@ -149,6 +149,7 @@ async def get_next_device_id(
 @router.get("/terminals", response_model=AdminTerminalListResponse)
 async def list_terminals(
     org_id: int | None = Query(None, description="Filter by organization ID"),
+    terminal_id: int | None = Query(None, gt=0),
     search: str | None = Query(
         None,
         description="Search by device_id, sn, address, note, cert_serial, org_name",
@@ -171,6 +172,8 @@ async def list_terminals(
         .outerjoin(TerminalType, TerminalType.id == Terminal.terminal_type_id)
     )
 
+    if terminal_id is not None:
+        query = query.where(Terminal.id == terminal_id)
     if org_id is not None:
         query = query.where(Terminal.org_id == org_id)
 
@@ -362,6 +365,25 @@ async def update_terminal(
             detail=f"Terminal with ID {terminal_id} not found",
         )
 
+    from etranprocessing_db.models.device_events import TerminalIdentityChange
+
+    change = await db.scalar(
+        select(TerminalIdentityChange).where(
+            TerminalIdentityChange.terminal_id == terminal_id,
+            TerminalIdentityChange.status.in_(["pending", "sync_pending"]),
+        )
+    )
+    if (
+        body.org_id is not None
+        and body.org_id != terminal.org_id
+        and change
+        and change.status in ("pending", "sync_pending")
+    ):
+        raise HTTPException(409, "Завершите или отмените смену идентичности")
+    if body.org_id is not None and body.org_id != terminal.org_id:
+        raise HTTPException(
+            409, "Для смены тенанта используйте действие «Сменить идентичность»"
+        )
     if body.org_id is not None:
         from app.services.product_scope import validate_terminal_transfer
 
@@ -483,13 +505,27 @@ async def generate_terminal_pin(
     user: dict = Depends(require_superuser),
 ) -> GeneratePinResponse:
     """Generate a new certificate PIN for the specified terminal (Superuser only)."""
-    terminal = await db.get(Terminal, terminal_id)
+    from app.routers.admin_identity_changes import locked_terminal
+
+    terminal = await locked_terminal(db, terminal_id)
     if not terminal:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Terminal with ID {terminal_id} not found",
         )
 
+    from etranprocessing_db.models.device_events import TerminalIdentityChange
+
+    change = await db.scalar(
+        select(TerminalIdentityChange).where(
+            TerminalIdentityChange.terminal_id == terminal.id,
+            TerminalIdentityChange.status.in_(["pending", "sync_pending"]),
+        )
+    )
+    if change is not None and change.status == "sync_pending":
+        raise HTTPException(409, "Сначала завершите синхронизацию передачи с IoT")
+    certificate_org_id = change.target_org_id if change else terminal.org_id
+    operation_id = str(change.operation_id) if change else None
     # Cancel previous pending pins for this terminal
     await db.execute(
         update(CertificatePin)
@@ -518,6 +554,8 @@ async def generate_terminal_pin(
     await db.commit()
 
     return GeneratePinResponse(
+        certificate_org_id=certificate_org_id,
+        identity_change_operation_id=operation_id,
         pin=pin,
         terminal_id=terminal.id,
         device_id=terminal.device_id,

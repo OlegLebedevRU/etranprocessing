@@ -14,6 +14,7 @@ import os
 import urllib.parse
 from datetime import UTC, datetime, timedelta
 from typing import Literal
+from uuid import UUID
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -133,9 +134,43 @@ def _cleanup_setup_cache(now: datetime) -> None:
 
 
 async def _check_setup_retry(
-    pin: str, cpserial: str, _db: AsyncSession
+    pin: str, cpserial: str, _db: AsyncSession, csr_body: bytes | None = None
 ) -> Response | None:
     """Safely handle setup retry if network dropped after PIN was marked used."""
+    from etranprocessing_db.models.device_events import TerminalIdentityChange
+
+    change = (
+        await _db.execute(
+            select(TerminalIdentityChange)
+            .join(CertificatePin, CertificatePin.id == TerminalIdentityChange.pin_id)
+            .where(CertificatePin.pin == pin, CertificatePin.status == "used")
+        )
+    ).scalar_one_or_none()
+    if isinstance(change, TerminalIdentityChange):
+        if (
+            change.status not in ("sync_pending", "completed")
+            or not change.issued_at
+            or datetime.now(UTC) > change.issued_at + timedelta(minutes=15)
+            or not csr_body
+        ):
+            return None
+        raw = csr_body.decode("utf-8", errors="replace").strip()
+        if "-----BEGIN" not in raw:
+            raw = f"-----BEGIN CERTIFICATE REQUEST-----\n{raw}\n-----END CERTIFICATE REQUEST-----\n"
+        try:
+            csr = x509.load_pem_x509_csr(raw.encode())
+        except ValueError:
+            return None
+        digest = hashlib.sha256(
+            csr.public_bytes(serialization.Encoding.DER)
+        ).hexdigest()
+        if (
+            digest != change.csr_sha256
+            or not valid_terminal_csr_signature(csr)
+            or not change.certificate_response
+        ):
+            return None
+        return ok_response(change.certificate_response)
     if pin not in _recent_setup_cache:
         return None
 
@@ -173,7 +208,11 @@ async def _find_terminal_by_pin(
     stmt = (
         select(Terminal, CertificatePin)
         .join(CertificatePin, CertificatePin.terminal_id == Terminal.id)
-        .where(CertificatePin.pin == pin, CertificatePin.purpose == purpose)
+        .where(
+            CertificatePin.pin == pin,
+            CertificatePin.purpose == purpose,
+            CertificatePin.org_id == Terminal.org_id,
+        )
     )
     stmt = stmt.where(
         CertificatePin.status.in_(["pending", "used"])
@@ -181,7 +220,7 @@ async def _find_terminal_by_pin(
         else CertificatePin.status == "pending"
     )
     if for_update:
-        stmt = stmt.with_for_update(of=CertificatePin)
+        stmt = stmt.with_for_update(of=(Terminal, CertificatePin))
 
     result = await db.execute(stmt)
     row = result.one_or_none()
@@ -552,9 +591,13 @@ async def _handle_check(
                 "CHECK: failed to decode/tosign for pin=%s", mask_pin(pin)
             )
 
+    from app.services.identity_change import pending_change
+
+    change = None if renewal_identity else await pending_change(db, terminal)
+    certificate_org_id = change.target_org_id if change else terminal.org_id
     dn = (
         f"CN={terminal.sn}"
-        f",O={terminal.org_id}"
+        f",O={certificate_org_id}"
         f",OU={terminal.device_id}"
         f",S={DN_STATE},C={DN_COUNTRY}"
         f",L={terminal.id}"
@@ -605,7 +648,9 @@ async def _handle_setup(
     )
     if not found:
         retry_resp = (
-            None if renewal_identity else await _check_setup_retry(pin, cpserial, db)
+            None
+            if renewal_identity
+            else await _check_setup_retry(pin, cpserial, db, await request.body())
         )
         if retry_resp:
             return retry_resp
@@ -629,6 +674,10 @@ async def _handle_setup(
         return error_response("Пин-код не существует", code=2)
 
     terminal, cert_pin = found
+    from app.services.identity_change import pending_change
+
+    change = None if renewal_identity else await pending_change(db, terminal)
+    certificate_org_id = change.target_org_id if change else terminal.org_id
     if renewal_identity:
         terminal = (
             await db.execute(
@@ -682,6 +731,17 @@ async def _handle_setup(
             return ok_response(cert_pin.renewal_response)
         raise HTTPException(409, "renewal_pin_consumed")
 
+    if change:
+        for oid, expected in (
+            (NameOID.ORGANIZATION_NAME, str(certificate_org_id)),
+            (NameOID.ORGANIZATIONAL_UNIT_NAME, str(terminal.device_id)),
+        ):
+            values = csr.subject.get_attributes_for_oid(oid)
+            if len(values) != 1 or str(values[0].value) != expected:
+                return error_response(
+                    "Несоответствие данных CSR новой идентичности", code=4
+                )
+
     # 2. Check CSR mismatch against terminal identity
     # Check OU (device_id) if present
     ou_attrs = csr.subject.get_attributes_for_oid(NameOID.ORGANIZATIONAL_UNIT_NAME)
@@ -701,7 +761,7 @@ async def _handle_setup(
     if o_attrs:
         o_val = str(o_attrs[0].value)
         digits = "".join(filter(str.isdigit, o_val))
-        if digits and int(digits) != 0 and int(digits) != terminal.org_id:
+        if digits and int(digits) != 0 and int(digits) != certificate_org_id:
             cert_logger.warning(
                 "SETUP: CSR mismatch O=%s does not match terminal org_id=%d",
                 o_val,
@@ -754,6 +814,12 @@ async def _handle_setup(
 
     not_valid_after = _parse_ca_datetime(ca_result.not_valid_after)
 
+    if change:
+        from app.services.identity_change import normalized_serial
+
+        change.old_serial = (
+            normalized_serial(terminal.cert_serial) if terminal.cert_serial else None
+        )
     terminal.cert_serial = ca_result.serial_number
     terminal.cert_not_valid_after = not_valid_after
     cert_pin.status = "used"
@@ -781,6 +847,11 @@ async def _handle_setup(
     if l4_term:
         l4_term.pin_state = "consumed"
         l4_term.certificate_reference = ca_result.serial_number
+
+    if change:
+        from app.services.identity_change import apply_issued_identity
+
+        await apply_issued_identity(db, terminal, change, cert_pin, csr_hash, pkcs7_b64)
 
     # Audit event (masked pin, never plain)
     audit = L4DeskAuditEvent(
@@ -814,7 +885,12 @@ async def _handle_setup(
         ca_result.not_valid_after,
     )
 
-    if not renewal_identity:
+    if change:
+        from app.services.identity_change import sync_iot
+
+        await sync_iot(db, terminal.id, change.operation_id)
+
+    if not renewal_identity and not change:
         _recent_setup_cache[pin] = (datetime.now(UTC), cpserial, pkcs7_b64)
     return ok_response(pkcs7_b64)
 
@@ -1275,3 +1351,17 @@ def _build_pkcs7_chain(cert_pem: str, ca_pem: str) -> str:
     )
 
     return base64.b64encode(content_info).decode("ascii")
+
+
+@router.post("/identity-changes/{terminal_id}/retry")
+async def retry_identity_iot(
+    terminal_id: int,
+    operation_id: UUID,
+    _auth: str = Depends(require_service_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.identity_change import sync_iot
+
+    if not (settings.service_auth_token or settings.internal_service_key):
+        raise HTTPException(503, "identity_service_auth_not_configured")
+    return {"completed": await sync_iot(db, terminal_id, operation_id)}

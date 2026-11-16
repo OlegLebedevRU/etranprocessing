@@ -16,7 +16,8 @@ if args.expanded:
     import etranprocessing_db.camera_credentials
     import etranprocessing_db.file_manager
     import etranprocessing_db.inventory
-    import etranprocessing_db.l4desk  # noqa: F401
+    import etranprocessing_db.l4desk
+    import etranprocessing_db.models.device_events  # noqa: F401
 
 args.output.parent.mkdir(parents=True, exist_ok=True)
 args.output.write_text(

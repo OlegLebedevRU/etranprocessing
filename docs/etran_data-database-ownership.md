@@ -107,3 +107,52 @@
 - Проверить upgrade с предыдущего production head и согласованный downgrade/roll-forward сценарий.
 - Для writer transfer сначала добавить owner API и перевести consumer, затем удалить прямую запись.
 - Любое новое исключение co-writing требует обновления этой матрицы с точными columns/use case и датой проверки.
+
+
+## Identity-change scoped exception (schema036, source candidate)
+
+Classic → Classic identity change is explicitly initiated only by an authenticated
+superuser in MB. MB writes pending/cancelled terminal_identity_changes and event
+acknowledgements. PB setup is the sole writer of issued/sync_pending/completed
+operation state and switches terminals.org_id together with cert_serial and
+cert_not_valid_after; SN/device_id are preserved. This exception does not authorize
+ordinary terminal auth, renewal, IoT or generic MB edit endpoints to change owner.
+
+Within that setup transaction PB may clear credential_recipient_pem and the old
+terminal_menu_bindings assignment; update License.org_id, clear balance and
+monthly_price_override_minor while preserving expires_at; and archive the previous
+Classic technical identity before switching the current binding.
+Both org rows are locked in ID order; L4Desk product/enrollment transfer is denied.
+No payment, balance ledger, billing-order or historical session org is rewritten.
+
+PB is the producer of device_admin_events (operation+type unique). The pending IoT
+incident is committed with issuance and automatically closed after a verified
+IoT acknowledgement; crashes cannot hide an issued but unsynchronized transfer.
+Old-certificate incidents arise only from rejected auth and are closed by SU.
+MB provides strict-SU list/count/status/comment endpoints; reads never acknowledge.
+The matching IoT API owns DeviceOrgBind and existing provisioning owner metadata,
+uses source/target/SN/operation fencing, revokes leases and closes old sessions
+before changing org. Existing device block/collision flags and SN-based broker
+ACLs remain intact. This is a distributed operation with explicit sync_pending
+recovery, not a cross-database atomic transaction.
+
+Archival preserves the existing tenant-composite FKs rather than weakening them:
+PB creates a deleted technical snapshot with a reserved negative ID, detaches its
+runtime link, and rebinds source L4DeskRemoteSession/FinUsageDaily/
+FinTerminalMonthlyCharge.terminal_id references to that snapshot. Their tenant,
+amounts, dates, ledger links and source facts remain unchanged. Current technical
+PK/runtime ID and SN stay stable in the target. Allocation is serialized only
+among identity transfers; it is not on terminal request paths.
+
+Schema036 additionally scopes uq_balance_day_terminal_tsp_ver by org_id. PB's
+existing balance lookup gains that org predicate, with no additional query.
+A global PaymExtId already owned by another terminal/tenant is refused, never
+returned or reattributed. Existing payment/balance records are not migrated.
+Deploy the tenant-scoped reader before exposing identity transfer actions;
+rollback of036 refuses pending/issued operations or cross-tenant aggregate groups.
+
+IoT migration `0014_task_tenant_history` сохраняет org задачи. Передача фиксирует
+владельца прежних задач только передаваемого устройства; прежние payload/results
+и события остаются доступны A. Новые задачи принадлежат B. Старые незавершённые
+задачи истекают, запоздалые результаты к ним отклоняются. `DevEvent.org_id`
+не переписывается; неизвестный владелец событий не восстанавливается автоматически.

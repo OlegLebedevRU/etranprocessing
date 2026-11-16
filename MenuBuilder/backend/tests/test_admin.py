@@ -395,6 +395,12 @@ async def test_admin_terminals_flow():
             return None
 
         mock_db.get = AsyncMock(side_effect=mock_get)
+        async def locked_scalar(statement):
+            if "terminal_identity_changes" in str(statement):
+                return None
+            assert "FOR UPDATE" in str(statement)
+            return mock_get(Terminal, 1)
+        mock_db.scalar = AsyncMock(side_effect=locked_scalar)
         create_payload = {
             "device_id": 1000202,
             "org_id": 1,

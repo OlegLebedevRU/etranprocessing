@@ -213,6 +213,11 @@ class PaymentService:
         # Idempotency check
         existing = await self.get_payment_by_ext_id(paym_ext_id)
         if existing:
+            if (
+                existing.org_id != terminal.org_id
+                or existing.terminal_id != terminal.id
+            ):
+                raise ValueError("Payment belongs to another terminal identity")
             return existing
 
         # Get TSP
@@ -323,6 +328,7 @@ class PaymentService:
         if menu_version is not None:
             cond = and_(
                 BalanceTerminalTsp.int_day == int_day,
+                BalanceTerminalTsp.org_id == terminal.org_id,
                 BalanceTerminalTsp.terminal_id == terminal.id,
                 BalanceTerminalTsp.tsp_id == tsp_id,
                 BalanceTerminalTsp.menu_version == menu_version,
@@ -330,6 +336,7 @@ class PaymentService:
         else:
             cond = and_(
                 BalanceTerminalTsp.int_day == int_day,
+                BalanceTerminalTsp.org_id == terminal.org_id,
                 BalanceTerminalTsp.terminal_id == terminal.id,
                 BalanceTerminalTsp.tsp_id == tsp_id,
                 BalanceTerminalTsp.menu_version.is_(None),

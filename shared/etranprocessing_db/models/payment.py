@@ -146,12 +146,14 @@ class BalanceTerminalTsp(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_balance_day_terminal_tsp_ver",
             "int_day",
+            "org_id",
             "terminal_id",
             "tsp_id",
-            "menu_version",
-            name="uq_balance_day_terminal_tsp_ver",
+            func.coalesce(menu_version, 0),
+            unique=True,
         ),
         Index("idx_balance_int_day", "int_day"),
         Index("idx_balance_terminal_id", "terminal_id"),

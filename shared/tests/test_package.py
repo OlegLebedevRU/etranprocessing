@@ -13,10 +13,10 @@ ROOT = Path(__file__).parents[1]
 
 
 def test_source_package_provenance():
-    for name in ("package-source-v035.json", "schema-v035.json", "schema-v035.md"):
+    for name in ("package-source-v036.json", "schema-v036.json", "schema-v036.md"):
         assert b"\r\n" not in (ROOT / "docs" / "l4desk" / name).read_bytes()
     manifest = json.loads(
-        (ROOT / "docs" / "l4desk" / "package-source-v035.json").read_text(
+        (ROOT / "docs" / "l4desk" / "package-source-v036.json").read_text(
             encoding="utf-8"
         )
     )
@@ -91,6 +91,10 @@ assert "fm_readiness_probes" in etranprocessing_db.Base.metadata.tables
 from etranprocessing_db import camera_credentials
 assert len(etranprocessing_db.Base.metadata.tables) == 59
 assert len(l4desk.__all__) == 23
+from etranprocessing_db.models import device_events
+assert len(etranprocessing_db.Base.metadata.tables) == 61
+assert "device_admin_events" in etranprocessing_db.Base.metadata.tables
+assert "terminal_identity_changes" in etranprocessing_db.Base.metadata.tables
 print(json.dumps(sorted(etranprocessing_db.Base.metadata.tables)))
 """
     result = subprocess.run(

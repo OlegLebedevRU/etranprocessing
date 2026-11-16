@@ -152,15 +152,17 @@ async def _get_org_settings(db: AsyncSession, org_id: int) -> OrgBillingSettings
 
 
 async def _get_terminal_for_org(
-    db: AsyncSession, terminal_id: int, org_id: int
+    db: AsyncSession, terminal_id: int, org_id: int, *, lock: bool = False
 ) -> Terminal:
-    """Get terminal belonging to the org or raise 404."""
-    result = await db.execute(
-        select(Terminal).where(
-            Terminal.id == terminal_id,
-            Terminal.org_id == org_id,
-        )
+    """Get terminal belonging to the org; lock only when producing a setup PIN."""
+    statement = select(Terminal).where(
+        Terminal.id == terminal_id, Terminal.org_id == org_id
     )
+    if lock:
+        statement = statement.with_for_update(of=Terminal).execution_options(
+            populate_existing=True
+        )
+    result = await db.execute(statement)
     terminal = result.scalar_one_or_none()
     if not terminal:
         raise HTTPException(status_code=404, detail="Terminal not found")
@@ -1329,7 +1331,7 @@ async def create_certificate_pin(
     db: AsyncSession = Depends(get_db),
 ) -> PinReadyResponse | PaymentRequiredResponse | RenewalPermissionResponse:
     """Request permission to create a PIN for a terminal (organizational cert billing)."""
-    terminal = await _get_terminal_for_org(db, terminal_id, user.org_id)
+    terminal = await _get_terminal_for_org(db, terminal_id, user.org_id, lock=True)
     org_settings = await _get_org_settings(db, user.org_id)
     is_master = getattr(org_settings, "billing_mode", None) == "master"
 

@@ -40,6 +40,7 @@ const LicensesPage = lazy(() => import("./routes/licenses/LicensesPage"));
 const AdminLayout = lazy(() => import("./routes/admin-layout"));
 const AdminOrganizationsPage = lazy(() => import("./routes/admin-organizations"));
 const AdminTerminalsPage = lazy(() => import("./routes/admin-terminals"));
+const AdminDeviceEventsPage = lazy(() => import("./routes/admin-device-events"));
 const AdminUsersPage = lazy(() => import("./routes/admin-users"));
 const AdminHubPage = lazy(() => import("./pages/AdminHubPage"));
 const SettingsLayout = lazy(() => import("./routes/settings-layout"));
@@ -341,6 +342,7 @@ export default function App() {
               />
               <Route path="organizations" element={<AdminOrganizationsPage />} />
               <Route path="terminals" element={<AdminTerminalsPage />} />
+              <Route path="device-events" element={<AdminDeviceEventsPage />} />
               <Route path="users" element={<AdminUsersPage />} />
               <Route path="hub" element={<AdminHubPage />} />
             </Route>

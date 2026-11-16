@@ -8,7 +8,7 @@ from pathlib import Path
 
 root = Path(__file__).parents[1]
 parser = argparse.ArgumentParser()
-parser.add_argument("--revision", required=True, choices=["035"])
+parser.add_argument("--revision", required=True, choices=["035", "036"])
 args = parser.parse_args()
 config = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
 paths = sorted((root / "etranprocessing_db").rglob("*.py")) + [

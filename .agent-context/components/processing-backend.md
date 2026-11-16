@@ -1,5 +1,7 @@
 # ProcessingBackend
 
+> 2026-11-16, source only: реализована смена идентичности Classic → Classic со стабильным SN, события SU и изоляция истории. Проверки и порядок выпуска: [handoff](../tasks/active/2026-11-16-identity-change.md). Production не проверен/не изменён.
+
 ## FM database isolation, 2026-11-12 — deployed
 
 Release main61a14fc; FM agent/internal routes and their auth use an independent

@@ -152,7 +152,16 @@ async def csrf_protection_middleware(request: Request, call_next):
     return await call_next(request)
 
 
-from app.routers import cameras, certificate_renewal
+from app.routers import (
+    admin_device_events,
+    admin_identity_changes,
+    cameras,
+    certificate_renewal,
+)
+
+app.include_router(admin_identity_changes.router)
+
+app.include_router(admin_device_events.router)
 
 app.include_router(certificate_renewal.router)
 app.include_router(cameras.router)

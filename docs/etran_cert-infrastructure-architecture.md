@@ -637,3 +637,50 @@ When an unauthenticated terminal appears in discovery logs with `validation_stat
 
 4. **Verify Immediate Authentication**:
    Check `processing-backend` container logs: subsequent requests from the terminal will immediately return `HTTP 200 OK` with `<state>ok</state>`.
+
+
+## Identity change with stable SN (schema036, source candidate)
+
+A superuser prepares Classic A → Classic B under Admin → Terminals → Actions.
+Preparation invalidates pending setup PINs and persists a UUID-bound intent;
+current owner and certificate remain A. Every subsequently issued setup PIN is
+interpreted using this intent at check/setup, independent of the PIN producer.
+Expired/reissued PINs leave the intent pending. Cancellation invalidates pending
+setup PINs and is allowed only before certificate issuance. Renew stays separate.
+
+CHECK returns the existing SN/device_id and target O=B. SETUP locks terminal/PIN,
+validates the target O/OU exactly and the established CN/sign contract, issues the
+certificate and atomically commits the new org/serial and an actionable IoT sync
+incident. It preserves paid license time, clears balance/individual price/menu,
+and records the issued response bound to the exact CSR for 15-minute recovery
+across workers/restarts. No first-mTLS or first-MQTT activation callback exists.
+
+PB then calls the dedicated authenticated IoT identity-transfers contract. Success
+marks completed and closes the sync incident. Failure/crash leaves sync_pending;
+SU retries the exact operation UUID. No idle/fleet retry or device polling occurs.
+PB environment IDENTITY_CHANGE_IOT_URL/IDENTITY_CHANGE_IOT_KEY is mandatory for an
+armed setup; values are provisioned externally, never stored in source. Apply036
+and compatible MB/PB, and release the IoT endpoint before enabling this UI.
+
+New-CA old serials are denied normally. Only the serial_mismatch branch performs
+an indexed history lookup and creates one old-certificate incident per transfer;
+a bounded 2048-entry/300-second per-worker cache suppresses repeated failed-auth
+work, while database uniqueness handles worker races. Legacy CN fallback also
+rejects an explicit numeric O that differs from the current tenant. Successful
+terminal authentication performs no additional identity/event queries.
+
+RabbitMQ's current CN/SN identity is retained: old-O certificates may still connect
+to the broker, as explicitly accepted for this flow. IoT uses its current owner
+binding; successful transfer revokes old control leases/sessions. An HTTP request
+with the previous certificate is actionable in Admin → Device Events. The SU-only
+new-event badge shares one 60-second browser poll, pauses while the tab is hidden,
+and refreshes after handling events. Reading does not mark events handled.
+
+These are source changes and local tests, not evidence of production rollout,
+terminal installation or a live broker/physical-device transfer.
+
+Technical source history uses an archived parent identity, retaining all composite
+owner FKs and source financial amounts. Daily balance uniqueness and the existing
+lookup include org_id so two owners on the same day/menu version cannot share an
+aggregate. Existing PaymExtId ownership is checked before returning idempotent
+results. No additional payment/auth lookup is added for these ownership checks.

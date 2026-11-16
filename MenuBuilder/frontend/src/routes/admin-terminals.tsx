@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
+import client from "../api/client";
+import { useAdminDeviceEvents } from "../components/AdminDeviceEventsContext";
 import {
   Alert,
   Button,
@@ -63,11 +65,25 @@ import {
 } from "../utils/timezone";
 import { useSession } from "../session/SessionContext";
 
+interface IdentityChange {
+  operation_id: string; source_org_id: number; target_org_id: number;
+  status: "pending" | "sync_pending" | "completed" | "cancelled";
+  requested_by: string; created_at: string; issued_at: string | null;
+}
+
 const { Title, Text, Paragraph } = Typography;
 const { useBreakpoint } = Grid;
 
 export default function AdminTerminalsPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { refresh: refreshEvents } = useAdminDeviceEvents();
+  const [identityTerminal, setIdentityTerminal] = useState<AdminTerminal | null>(null);
+  const [identityChange, setIdentityChange] = useState<IdentityChange | null>(null);
+  const [identityLoading, setIdentityLoading] = useState(false);
+  const [identityTarget, setIdentityTarget] = useState<number>();
+  const [identityOperationId, setIdentityOperationId] = useState(() => crypto.randomUUID());
+  const [identityError, setIdentityError] = useState<string | null>(null);
   const screens = useBreakpoint();
   const isMobile = !screens.md;
   const { user } = useSession();
@@ -80,7 +96,7 @@ export default function AdminTerminalsPage() {
 
   // Filter states
   const [selectedOrgId, setSelectedOrgId] = useState<number | undefined>(() => {
-    return user?.org_id ? Number(user.org_id) : undefined;
+    return searchParams.get("org_id") ? Number(searchParams.get("org_id")) : user?.org_id ? Number(user.org_id) : undefined;
   });
   const [selectedStatus, setSelectedStatus] = useState<boolean | undefined>(undefined);
   const [searchInput, setSearchInput] = useState("");
@@ -145,6 +161,7 @@ export default function AdminTerminalsPage() {
     setLoading(true);
     try {
       const res = await getAdminTerminals({
+        terminal_id: searchParams.get("terminal_id") ? Number(searchParams.get("terminal_id")) : undefined,
         org_id: selectedOrgId,
         is_active: selectedStatus,
         search: searchQuery || undefined,
@@ -158,7 +175,7 @@ export default function AdminTerminalsPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedOrgId, selectedStatus, searchQuery, page, pageSize]);
+  }, [selectedOrgId, selectedStatus, searchQuery, page, pageSize, searchParams]);
 
   useEffect(() => {
     fetchTerminals();
@@ -428,6 +445,36 @@ export default function AdminTerminalsPage() {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     message.success("Скопировано в буфер обмена");
+  };
+
+  const openIdentity = async (terminal: AdminTerminal) => {
+    setIdentityTerminal(terminal); setIdentityChange(null); setIdentityTarget(undefined);
+    setIdentityOperationId(crypto.randomUUID()); setIdentityError(null); setIdentityLoading(true);
+    try {
+      const { data } = await client.get<IdentityChange | null>(`/admin/terminals/${terminal.id}/identity-change`);
+      setIdentityChange(data);
+    } catch (error) { setIdentityError(error instanceof Error ? error.message : "Не удалось прочитать состояние передачи"); }
+    finally { setIdentityLoading(false); }
+  };
+  const changeIdentity = async (action: "start" | "cancel" | "retry") => {
+    if (!identityTerminal) return;
+    setIdentityLoading(true); setIdentityError(null);
+    const url = `/admin/terminals/${identityTerminal.id}/identity-change`;
+    try {
+      if (action === "start") {
+        const { data } = await client.post<IdentityChange>(url, { target_org_id: identityTarget, operation_id: identityOperationId });
+        setIdentityChange(data); message.success("Смена идентичности подготовлена. Выдайте PIN и введите его на устройстве.");
+      } else if (identityChange && action === "cancel") {
+        const { data } = await client.delete<IdentityChange>(`${url}/${identityChange.operation_id}`);
+        setIdentityChange(data); message.success("Ожидающая смена отменена");
+      } else if (identityChange) {
+        const { data } = await client.post<{ completed: boolean }>(`${url}/${identityChange.operation_id}/retry`);
+        if (data.completed) { setIdentityChange({ ...identityChange, status: "completed" }); message.success("Передача в IoT завершена"); }
+        else message.warning("Синхронизация не завершена. Проверьте событие устройства.");
+      }
+      void fetchTerminals(); refreshEvents();
+    } catch (error) { setIdentityError(error instanceof Error ? error.message : "Не удалось выполнить операцию"); }
+    finally { setIdentityLoading(false); }
   };
 
   const columns: ColumnsType<AdminTerminal> = [
@@ -716,6 +763,12 @@ export default function AdminTerminalsPage() {
             icon: <EditOutlined />,
             label: "Редактировать параметры",
             onClick: () => handleOpenEdit(record),
+          },
+          {
+            key: "identity_change",
+            icon: <SwapOutlined />,
+            label: "Сменить идентичность",
+            onClick: () => void openIdentity(record),
           },
           {
             key: "goto_device_management",
@@ -1129,9 +1182,11 @@ export default function AdminTerminalsPage() {
           <Form.Item
             name="org_id"
             label="Организация"
+            extra="Для смены тенанта используйте действие «Сменить идентичность»."
             rules={[{ required: true, message: "Выберите организацию" }]}
           >
             <Select
+              disabled
               showSearch
               optionFilterProp="label"
               options={orgs.map((o) => ({
@@ -1296,6 +1351,22 @@ export default function AdminTerminalsPage() {
         </Form>
       </Modal>
 
+      <Modal title={`Смена идентичности терминала #${identityTerminal?.device_id ?? ""}`} open={Boolean(identityTerminal)} onCancel={() => { if (!identityLoading) setIdentityTerminal(null); }} footer={<Space><Button disabled={identityLoading} onClick={() => identityTerminal && void openIdentity(identityTerminal)}>Обновить состояние</Button><Button disabled={identityLoading} onClick={() => setIdentityTerminal(null)}>Закрыть</Button></Space>}>
+        <Space direction="vertical" style={{ width: "100%" }}>
+          <Text>SN сохраняется: <Text code>{identityTerminal?.sn}</Text></Text>
+          <Alert type="info" showIcon title="До получения нового сертификата устройство работает в прежнем тенанте. Переключение начинается при выдаче сертификата по PIN." description="Оплаченный срок лицензии сохраняется. Остаток, индивидуальная цена и назначение прежнего меню сбрасываются. Доступно только Classic → Classic." />
+          {identityError && <Alert type="error" title={identityError} />}
+          {identityLoading && <Text>Выполняется операция…</Text>}
+          {identityChange && <Space direction="vertical"><Text>Передача: {identityChange.source_org_id} → {identityChange.target_org_id}</Text><Tag color={identityChange.status === "sync_pending" ? "error" : "blue"}>{{ pending: "Ожидается получение сертификата", sync_pending: "Требуется синхронизация с IoT", completed: "Завершено", cancelled: "Отменено" }[identityChange.status]}</Tag><Text type="secondary">Операция: {identityChange.operation_id}</Text></Space>}
+          {(!identityChange || ["completed", "cancelled"].includes(identityChange.status)) && <>
+            <Select aria-label="Новый тенант" placeholder="Выберите новый тенант Classic" value={identityTarget} onChange={setIdentityTarget} style={{ width: "100%" }} showSearch optionFilterProp="label" options={orgs.filter(org => org.org_id !== (identityChange && ["sync_pending", "completed"].includes(identityChange.status) ? identityChange.target_org_id : identityTerminal?.org_id) && org.site_mode === "classic").map(org => ({ value: org.org_id, label: `${org.org_name} (#${org.org_id})` }))} />
+            <Button type="primary" loading={identityLoading} disabled={!identityTarget || Boolean(identityError)} onClick={() => void changeIdentity("start")}>Подготовить смену идентичности</Button>
+          </>}
+          {identityChange?.status === "pending" && <Space wrap><Button disabled={identityLoading} onClick={() => identityTerminal && void handleGeneratePin(identityTerminal)}>Выдать PIN</Button><Popconfirm title="Отменить смену идентичности?" description="Все неиспользованные PIN получения будут аннулированы." onConfirm={() => changeIdentity("cancel")}><Button danger disabled={identityLoading}>Отменить смену</Button></Popconfirm></Space>}
+          {identityChange?.status === "sync_pending" && <Button type="primary" loading={identityLoading} onClick={() => void changeIdentity("retry")}>Повторить синхронизацию с IoT</Button>}
+        </Space>
+      </Modal>
+
       {/* Modal: PIN Generated Display */}
       <Modal
         title="Сгенерирован новый PIN-код"
@@ -1328,6 +1399,7 @@ export default function AdminTerminalsPage() {
           >
             {generatedPinData?.pin}
           </div>
+          {generatedPinData?.certificate_org_id != null && <Paragraph>Сертификат для тенанта <Text strong>#{generatedPinData.certificate_org_id}</Text>{generatedPinData.identity_change_operation_id ? " — PIN смены идентичности" : ""}</Paragraph>}
           <div>
             <Button
               icon={<CopyOutlined />}
