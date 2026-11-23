@@ -258,6 +258,7 @@ class StreamStopResponse(BaseModel):
 
 class StreamStateResponse(BaseModel):
     sn: str
+    agent: ControlStatusAgent | None = None
     stream: dict[str, Any] | None = None
     ingress: dict[str, Any] | None = None
 
@@ -1530,6 +1531,7 @@ async def set_device_stream_quality(
 @router.get(
     "/devices/{device_id}/stream/state",
     response_model=StreamStateResponse,
+    response_model_exclude_unset=True,
     status_code=status.HTTP_200_OK,
 )
 async def get_device_stream_state(
@@ -1537,6 +1539,7 @@ async def get_device_stream_state(
     contract_version: int | None = Query(None, ge=3, le=3),
     user: dict[str, Any] = Depends(require_permission(PERMISSION_VIDEO_VIEW)),
     db: AsyncSession = Depends(get_db),
+    watch: bool = False,
 ) -> StreamStateResponse:
     """Get presence stream state and ingress RTP status."""
     terminal = await _verify_device_access(device_id, user, db)
@@ -1559,7 +1562,7 @@ async def get_device_stream_state(
     )
     lease_info = status_data.get("lease") or {}
     stream_info = (status_data.get("agent") or {}).get("stream")
-    ingress_stats = await _get_ingress_status(terminal.sn)
+    ingress_stats = None if watch else await _get_ingress_status(terminal.sn)
 
     # Stopped state of current epoch takes priority over stale running cache
     if (
@@ -1573,11 +1576,15 @@ async def get_device_stream_state(
             "reason": "lease_expired",
         }
 
-    return StreamStateResponse(
+    result = StreamStateResponse(
         sn=terminal.sn,
         stream=stream_info,
         ingress=ingress_stats,
     )
+    if watch:
+        agent = (status_data.get("agent") or {}) | {"stream": stream_info}
+        result.agent = ControlStatusAgent.model_validate(agent)
+    return result
 
 
 @router.post("/devices/{device_id}/control/keepalive")
