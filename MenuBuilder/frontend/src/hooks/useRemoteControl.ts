@@ -1,8 +1,8 @@
+import { openPortalChannel, type PortalChannel } from "../utils/portalSocket";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { notification } from "antd";
 import {
   acquireControlLease,
-  getControlWsUrl,
   releaseControlLease,
   getNackMessage,
   ClickResult,
@@ -54,7 +54,7 @@ export function useRemoteControl({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [busyOwner, setBusyOwner] = useState<string | null>(null);
 
-  const wsRef = useRef<WebSocket | null>(null);
+  const wsRef = useRef<PortalChannel | null>(null);
   const leaseRef = useRef<ControlLease | null>(null);
   const helloTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeDeviceIdRef = useRef<number | null>(deviceId);
@@ -218,8 +218,7 @@ export function useRemoteControl({
       setLease(leaseData);
 
       // 2. Open WebSocket
-      const wsUrl = getControlWsUrl(leaseData.ws_path);
-      const ws = new WebSocket(wsUrl);
+      const ws = openPortalChannel({ channel: "control", device: deviceId, lease: leaseData.lease_id });
       wsRef.current = ws;
 
       // 3. Connect & wait for "hello"

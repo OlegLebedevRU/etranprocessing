@@ -164,8 +164,21 @@ async def load_video_status(
         if exc.status_code == 404:
             return status  # Existing v1 lease has no v2 record.
         raise
+    stream = confirmed_video_stream(
+        raw, sn, str(lease["lease_id"]), camera_contract, expected_stream_instance_id
+    )
+    return dict(status, agent=dict(status.get("agent") or {}, stream=stream))
+
+
+def confirmed_video_stream(
+    raw: dict,
+    sn: str,
+    lease_id: str,
+    camera_contract: str | None,
+    expected_stream_instance_id: str | None,
+) -> dict:
     stream = validate_iot_state(raw)
-    if stream["sn"] != sn or stream["lease_id"] != str(lease["lease_id"]):
+    if stream["sn"] != sn or stream["lease_id"] != lease_id:
         raise HTTPException(409, detail={"code": "lease_mismatch"})
     if expected_stream_instance_id and (
         stream["stream_instance_id"] != expected_stream_instance_id
@@ -179,7 +192,7 @@ async def load_video_status(
         source_id=descriptor["source_id"],
         profile=descriptor["profile_id"],
     )
-    return dict(status, agent=dict(status.get("agent") or {}, stream=stream))
+    return stream
 
 
 def validate_video(definition: str, value: dict[str, Any]) -> dict[str, Any]:

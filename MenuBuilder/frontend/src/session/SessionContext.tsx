@@ -1,3 +1,4 @@
+import { attachPortalSocket } from "../utils/portalSocket";
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { getMe, type UserInfo } from "../api/auth";
 import { scheduleRefresh } from "../api/session";
@@ -19,6 +20,10 @@ const SessionContext = createContext<SessionContextType>({
 export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) return attachPortalSocket();
+  }, [Boolean(user), user?.sub, user?.org_id, user?.session_id]);
 
   // Migration for legacy clients: clean up mb_token / mb_master_token from localStorage
   useEffect(() => {

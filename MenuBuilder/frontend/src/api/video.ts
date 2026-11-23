@@ -1,4 +1,5 @@
 import client from "./client";
+import { renewPortalLease } from "../utils/portalSocket";
 import type { AxiosRequestConfig } from "axios";
 
 export interface VideoSessionResponse {
@@ -334,6 +335,8 @@ export async function changeControlScope(
 }
 
 export async function keepaliveControlLease(deviceId: number, leaseId: string, signal?: AbortSignal): Promise<void> {
+  const pending = renewPortalLease(deviceId, leaseId, signal);
+  if (pending) return pending;
   await client.post(`/v1/video/devices/${deviceId}/control/keepalive`, { lease_id: leaseId }, { signal, timeout: 8000 });
 }
 

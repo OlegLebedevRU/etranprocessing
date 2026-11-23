@@ -1,3 +1,4 @@
+import { openPortalChannel, type PortalChannel } from "../utils/portalSocket";
 import { publishChange } from "../utils/portalChanges";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
@@ -606,7 +607,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
     if (!deviceId || !canView) return;
 
     let disposed = false;
-    let socket: WebSocket | null = null;
+    let socket: PortalChannel | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let refreshing = false;
     let refreshPending = false;
@@ -664,8 +665,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
 
     const connect = () => {
       if (disposed) return;
-      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-      socket = new WebSocket(`${proto}//${window.location.host}/api/v1/video/devices/${deviceId}/watch/ws`);
+      socket = openPortalChannel({ channel: "watch", device: deviceId });
       socket.onopen = () => {
         retryMs = 1000;
         disconnectedAt = 0;
