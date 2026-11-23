@@ -1,3 +1,4 @@
+import { watchPortalView } from "../utils/portalSocket";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Button, Card, Grid, Input, message, Space, Table, Tooltip, Typography } from "antd";
 import { CloudOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
@@ -137,16 +138,15 @@ export default function MonitoringPage() {
   }, [page, pageSize, search]);
 
   useEffect(() => {
-    load(false);
-  }, [load]);
-
-  // Auto-refresh: 1 time per minute (60,000 ms)
-  useEffect(() => {
-    const timer = setInterval(() => {
-      load(true);
-    }, 60000);
-    return () => clearInterval(timer);
-  }, [load]);
+    setLoading(true);
+    return watchPortalView<{items: MonitoringTerminal[]; total: number}>(
+      {channel: "monitoring", page, size: pageSize, search}, data => {
+        setTerminals(data.items);
+        setTotal(data.total);
+        setLastUpdate(new Date().toLocaleTimeString("ru-RU"));
+        setLoading(false);
+      }, () => void load(false));
+  }, [page, pageSize, search, load]);
 
   const handleManualRefresh = () => {
     const now = Date.now();

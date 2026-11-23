@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import String, select
+from sqlalchemy import String, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -230,6 +230,9 @@ async def create_order(
                 details=snapshot,
             )
         )
+        await db.execute(
+            select(func.pg_notify("portal_views_v1", f"licenses/{tenant_id}"))
+        )
     payment_id = payment.id
     await db.commit()  # provider IO never holds the tenant lock
     return await sync_order(db, payment_id, tenant_id)
@@ -298,6 +301,7 @@ async def sync_order(
         or not amount_matches
     ):
         raise HTTPException(409, "Подтверждение платежа не соответствует заказу")
+    previous = (payment.status, payment.confirmation_url)
     payment.provider_payment_id = remote["id"]
     payment.confirmation_url = (remote.get("confirmation") or {}).get(
         "confirmation_url"
@@ -382,6 +386,10 @@ async def sync_order(
         payment.status = status
     else:
         raise HTTPException(409, "Неизвестное состояние платежа")
+    if previous != (payment.status, payment.confirmation_url):
+        await db.execute(
+            select(func.pg_notify("portal_views_v1", f"licenses/{owner_id}"))
+        )
     await db.commit()
     return payment_read(payment, snapshot)
 

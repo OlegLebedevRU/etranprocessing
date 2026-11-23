@@ -1,4 +1,4 @@
-import { onChange } from "../utils/portalChanges";
+import { onChange, onQuality } from "../utils/portalChanges";
 import { useEffect, useState } from "react";
 import { getRuntimeQuality, setRuntimeQuality } from "../api/video";
 import type { RuntimeQuality } from "../api/video";
@@ -34,6 +34,16 @@ export function useDesktopQuality(session: DesktopQualitySession | null,
     let readAfterCommand = false;
     let readRetryAt = 0;
     const off = onChange(device, ["quality"], () => { revision++; });
+    let latest = 0;
+    const unsubscribe = onQuality((id, epoch, at, value) => {
+      if (id !== device || epoch !== stream || at <= latest) return;
+      latest = at;
+      cached = value;
+      observed = revision;
+      readAt = performance.now();
+      readRetryAt = 0;
+      setQuality(value);
+    });
     const tick = async () => {
       try {
         const age = performance.now() - readAt;
@@ -41,14 +51,18 @@ export function useDesktopQuality(session: DesktopQualitySession | null,
         if (!cached || qualityReadDue(age, observed !== revision, readAfterCommand)) {
           const before = revision;
           readRetryAt = performance.now() + 5000;
-          cached = await getRuntimeQuality(device, stream, abort.signal);
+          const start = latest;
+          const snapshot = await getRuntimeQuality(device, stream, abort.signal);
+          if (start === latest) {
+            cached = snapshot;
+            observed = before;
+            readAt = performance.now();
+          }
           readRetryAt = 0;
           readAfterCommand = false;
-          observed = before;
-          readAt = performance.now();
         }
         const value = cached;
-        if (abort.signal.aborted) return;
+        if (abort.signal.aborted || !value) return;
         setQuality(value);
         if (writer) {
           // A camera starts read-only. The original initiator explicitly grants
@@ -77,7 +91,7 @@ export function useDesktopQuality(session: DesktopQualitySession | null,
       }
     };
     void tick();
-    return () => { off(); abort.abort(); clearTimeout(timer); };
+    return () => { off(); unsubscribe(); abort.abort(); clearTimeout(timer); };
   }, [device, lease, stream, publisher, writerKey, readStats]);
   return quality;
 }

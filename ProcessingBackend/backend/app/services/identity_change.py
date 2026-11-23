@@ -78,7 +78,7 @@ async def pending_change(
 async def add_incident(
     db: AsyncSession, change: TerminalIdentityChange, event_type: str, message: str
 ) -> None:
-    await db.execute(
+    inserted = await db.scalar(
         insert(DeviceAdminEvent)
         .values(
             event_key=f"{change.operation_id}:{event_type}",
@@ -93,7 +93,10 @@ async def add_incident(
             },
         )
         .on_conflict_do_nothing(index_elements=[DeviceAdminEvent.event_key])
+        .returning(DeviceAdminEvent.id)
     )
+    if inserted is not None:
+        await db.execute(select(func.pg_notify("portal_views_v1", "admin-events")))
 
 
 async def record_old_certificate(

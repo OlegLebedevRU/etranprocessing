@@ -1,5 +1,6 @@
 /** One transport per authenticated tab. Logical channels retain their own lifecycle. */
-type Topic = { channel: "changes"; org: number; device: number | null }
+type View = { channel: "admin-events" | "licenses" } | { channel: "monitoring"; page: number; size: number; search: string };
+type Topic = View | { channel: "changes"; org: number; device: number | null }
   | { channel: "watch"; device: number }
   | { channel: "control" | "renew"; device: number; lease: string };
 
@@ -133,4 +134,37 @@ export function renewPortalLease(device: number, lease: string, signal?: AbortSi
     };
     channel.onclose = () => { cleanup(); reject(new Error("Lease renewal not confirmed")); };
   });
+}
+
+/** Share the tab transport and release server-side subscriptions while hidden. */
+export function watchPortalView<T>(topic: View, receive: (value: T) => void, fallback: () => void) {
+  let channel: PortalChannel | undefined;
+  let timer: ReturnType<typeof setTimeout>;
+  let delay = 1000;
+  let lastFallback = 0;
+  const stop = () => {
+    clearTimeout(timer);
+    if (channel) { channel.onclose = null; channel.close(); channel = undefined; }
+  };
+  const connectView = () => {
+    stop();
+    if (document.visibilityState === "hidden") return;
+    channel = openPortalChannel(topic);
+    channel.onmessage = event => {
+      delay = 1000;
+      receive(JSON.parse(event.data) as T);
+    };
+    channel.onclose = event => {
+      if ([4401, 4403].includes(event.code)) return;
+      if (Date.now() - lastFallback >= 60_000) {
+        lastFallback = Date.now();
+        fallback();
+      }
+      timer = setTimeout(connectView, delay + Math.random() * 500);
+      delay = Math.min(30_000, delay * 2);
+    };
+  };
+  document.addEventListener("visibilitychange", connectView);
+  connectView();
+  return () => { document.removeEventListener("visibilitychange", connectView); stop(); };
 }

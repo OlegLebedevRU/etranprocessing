@@ -1,9 +1,10 @@
+import { watchPortalView } from "../utils/portalSocket";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import client from "../api/client";
 
 const Context = createContext({ count: 0, refresh: () => {} });
 
-/** One browser-owned poll for both badges; no requests for ordinary users or hidden tabs. */
+/** Both badges share one subscription while the tab is visible. */
 export function AdminDeviceEventsProvider({ enabled, children }: { enabled: boolean; children: ReactNode }) {
   const [count, setCount] = useState(0);
   const active = useRef(false);
@@ -28,15 +29,10 @@ export function AdminDeviceEventsProvider({ enabled, children }: { enabled: bool
   useEffect(() => {
     mounted.current = true;
     if (!enabled) setCount(0);
-    void refresh();
-    const timer = enabled ? window.setInterval(() => void refresh(), 60_000) : undefined;
-    const onVisible = () => { void refresh(); };
-    if (enabled) document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      mounted.current = false;
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
+    const stop = enabled ? watchPortalView<{new_count: number}>({channel: "admin-events"}, data => {
+      if (Number.isSafeInteger(data.new_count) && data.new_count >= 0) setCount(data.new_count);
+    }, refresh) : undefined;
+    return () => { mounted.current = false; stop?.(); };
   }, [enabled, refresh]);
   return <Context.Provider value={{ count: enabled ? count : 0, refresh }}>{children}</Context.Provider>;
 }
