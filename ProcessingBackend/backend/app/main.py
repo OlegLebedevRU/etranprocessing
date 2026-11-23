@@ -20,9 +20,15 @@ async def lifespan(app: FastAPI):
 
         await asyncio.to_thread(issuing_key)
         logger.info("Terminal issuing CA loaded; local signer ready")
+    from app.services.file_change_publisher import start
+
+    publisher = start()
     try:
         yield
     finally:
+        if publisher:
+            publisher.cancel()
+            await asyncio.gather(publisher, return_exceptions=True)
         await fm_engine.dispose()
         await engine.dispose()
 

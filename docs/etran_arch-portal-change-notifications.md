@@ -1,0 +1,11 @@
+# Portal change notifications
+
+App1 emits camera gauge, command completion, enrollment, stream/quality, presence and session-feed hints to the durable internal fanout exchange portal.changes.v1. ProcessingBackend emits file operation and readiness hints after commit. Heartbeats, remote-input packets, credentials, payloads and input acknowledgements are excluded. Missing hints are recovered by an authorized snapshot or cursor read.
+
+One AMQP connection per MenuBuilder process owns an exclusive portal.watch.<uuid> queue (512 messages, 10-second TTL). Device and organization come from server-owned records. The file publisher uses the portal terminal primary key, scoped by tenant; device IDs occupy a separate namespace. Notices carry only affected kinds. The existing video watch socket serves cameras and desktop streams. Remote-input and lease authorization stay on the control channel. List and file watchers use /api/v1/video/changes/ws, cookie authentication, same-origin checks and bounded sessions.
+
+Configure PORTAL_AMQP_URL independently for MenuBuilder backend (reader) and ProcessingBackend (writer), via environment-only secrets. App1 owns exchange declaration. The two service usernames must be reserved as exact service identities in app1 RabbitMQ reconciliation. The reader can bind only its own ephemeral queues, the publisher can write only the portal exchange. Production credentials are managed outside Git.
+
+The browser re-reads state after notifications or fallback deadlines. Desktop quality sampling by the writer remains local. IR-cut progress uses a bounded status query where firmware has no phase event. The feed retains the durable cursor and commercial stop retains its SQL outbox, periodic ownership checks and operation ids. A new local stop obligation wakes its worker only after commit, and competing outbox claimants skip locked rows.
+
+Verification includes broker ACL and reconnect, separation of tenant and terminal namespaces, cancellation during camera enrollment, duplicate hint coalescing, file-result rollback, unchanged remote-input permissions, full backend and frontend suites and the portal production build. User-facing live video, actual remote input and file transfer require an operator session for final acceptance.

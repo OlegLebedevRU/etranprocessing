@@ -473,8 +473,10 @@ class IotEventConsumer:
                         res.quarantine_count,
                         res.cursor_lag,
                     )
-                # Sleep between polling cycles
-                await asyncio.sleep(settings.iot_consumer_poll_interval_sec)
+                from app.services.portal_changes import wait_for_feed
+
+                if res.events_received < settings.iot_consumer_batch_size:
+                    await wait_for_feed(settings.iot_consumer_poll_interval_sec)
             except asyncio.CancelledError:
                 logger.info(
                     "IoT consumer worker received cancellation request; shutting down"

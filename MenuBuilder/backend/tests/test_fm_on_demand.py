@@ -45,7 +45,9 @@ async def test_probe_creates_pending_before_dispatch_and_releases_portal_transac
     calls = []
     identifier = uuid4()
     monkeypatch.setattr(
-        fm, "_verify_device_access", AsyncMock(return_value=SimpleNamespace(org_id=7))
+        fm,
+        "_verify_device_access",
+        AsyncMock(return_value=SimpleNamespace(org_id=7, id=41)),
     )
     monkeypatch.setattr(fm, "actor", lambda *a: {"X-Org-Id": "7"})
     monkeypatch.setattr(
@@ -75,7 +77,9 @@ async def test_live_legacy_selected_terminal_uses_existing_path_without_probe(
     monkeypatch,
 ):
     monkeypatch.setattr(
-        fm, "_verify_device_access", AsyncMock(return_value=SimpleNamespace(org_id=7))
+        fm,
+        "_verify_device_access",
+        AsyncMock(return_value=SimpleNamespace(org_id=7, id=41)),
     )
     monkeypatch.setattr(fm, "actor", lambda *a: {})
     legacy = {"available": True, "capabilities": ["fs.session"]}
@@ -92,7 +96,9 @@ async def test_live_legacy_selected_terminal_uses_existing_path_without_probe(
 @pytest.mark.anyio
 async def test_unavailable_proof_cannot_acquire_lease(monkeypatch):
     monkeypatch.setattr(
-        fm, "_verify_device_access", AsyncMock(return_value=SimpleNamespace(org_id=7))
+        fm,
+        "_verify_device_access",
+        AsyncMock(return_value=SimpleNamespace(org_id=7, id=41)),
     )
     monkeypatch.setattr(fm, "actor", lambda *a: {})
     upstream = AsyncMock(return_value={"available": False})

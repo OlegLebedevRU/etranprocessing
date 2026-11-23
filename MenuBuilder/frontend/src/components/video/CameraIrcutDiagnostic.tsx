@@ -1,3 +1,4 @@
+import { waitForChange } from "../../utils/portalChanges";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Button, Descriptions, Modal, Progress, Space, Typography } from "antd";
 import { commandCameraIrcut, getCameraCommand, type CameraSnapshot, type IrcutCommand, type IrcutReport } from "../../api/cameras";
@@ -12,12 +13,7 @@ const reasons: Record<string, string> = {
   restore_unconfirmed: "Настройки требуют восстановления", preparing: "Подготовка камеры",
   recovering: "Восстановление настроек", frame_unavailable_or_stale: "Кадр не получен или устарел",
 };
-const wait = (signal: AbortSignal, ms: number) => new Promise<void>((resolve, reject) => {
-  if (signal.aborted) { reject(new Error("aborted")); return; }
-  const abort = () => { clearTimeout(timer); reject(new Error("aborted")); };
-  const timer = setTimeout(() => { signal.removeEventListener("abort", abort); resolve(); }, ms);
-  signal.addEventListener("abort", abort, { once: true });
-});
+
 
 /** RPC169 only: no arbitrary pairs, pin assignment or search action. */
 export function CameraIrcutDiagnostic({ device, org, snapshot, disabled, onBusy }: {
@@ -66,7 +62,7 @@ export function CameraIrcutDiagnostic({ device, org, snapshot, disabled, onBusy 
         return body.ircut;
       }
       if ([4, 5, 6, 7].includes(status.status)) throw new Error("Команда завершилась без результата");
-      await wait(signal, 1500);
+      await waitForChange(device, ["command"], signal, 3500);
     }
     throw new Error("Ответ пока не получен. Новый тест не запускайте; проверьте статус этой операции.");
   }
@@ -79,7 +75,7 @@ export function CameraIrcutDiagnostic({ device, org, snapshot, disabled, onBusy 
       const next = await rpc("status", { session_id: session });
       accept(next);
       if (next.phase === 12) return;
-      await wait(lifecycle.current!.signal, 4000);
+      await waitForChange(device, ["camera"], lifecycle.current!.signal, 10000);
     }
     throw new Error("Проверка затянулась. Проверьте статус или отмените её.");
   }

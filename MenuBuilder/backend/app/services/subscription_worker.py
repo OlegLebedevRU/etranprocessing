@@ -23,6 +23,52 @@ logger = logging.getLogger(__name__)
 _last_payment_id = 0
 
 
+# The process committing a new stop obligation wakes its local worker. Every
+# worker retains the existing periodic sweep for process loss and cutover.
+_stop_tenants: set[int] = set()
+_stop_wake = asyncio.Event()
+
+
+def _collect_stop(session, _context, _instances):
+    from sqlalchemy import inspect
+
+    for rec in session.dirty:
+        if (
+            isinstance(rec, L4DeskRemoteSession)
+            and rec.state == "stop_requested"
+            and inspect(rec).attrs.state.history.has_changes()
+        ):
+            session.info.setdefault("new_stop_tenants", set()).add(rec.tenant_id)
+
+
+def _stop_committed(session):
+    if not session.in_nested_transaction():
+        for tenant in session.info.pop("new_stop_tenants", ()):
+            if len(_stop_tenants) < 512:
+                _stop_tenants.add(tenant)
+                _stop_wake.set()
+
+
+def _stop_rollback(session):
+    session.info.pop("new_stop_tenants", None)
+
+
+async def _new_stops():
+    while True:
+        await _stop_wake.wait()
+        tenants = _stop_tenants.copy()
+        _stop_tenants.clear()
+        _stop_wake.clear()
+        for tenant in tenants:
+            try:
+                async with async_session() as db, db.begin():
+                    await RemoteSessionStopService.process_stop_outbox(
+                        db, tenant_id=tenant
+                    )
+            except Exception:
+                logger.exception("Immediate stop retry deferred to reconciliation")
+
+
 async def reconcile_sessions() -> None:
     async with async_session() as db:
         stmt = select(L4DeskTenantProfile.tenant_id)
@@ -144,6 +190,24 @@ async def _run_loop(callback) -> None:
 
 async def run_worker() -> None:
     # A slow payment provider cannot delay administrative/subscription session checks.
-    async with asyncio.TaskGroup() as group:
-        group.create_task(_run_loop(reconcile_sessions))
-        group.create_task(_run_loop(reconcile_payments))
+    global _stop_wake
+    _stop_wake = asyncio.Event()
+    _stop_tenants.clear()
+    from sqlalchemy import event
+    from sqlalchemy.orm import Session
+
+    callbacks = (
+        ("before_flush", _collect_stop),
+        ("after_commit", _stop_committed),
+        ("after_rollback", _stop_rollback),
+    )
+    for name, fn in callbacks:
+        event.listen(Session, name, fn)
+    try:
+        async with asyncio.TaskGroup() as group:
+            group.create_task(_run_loop(reconcile_sessions))
+            group.create_task(_run_loop(reconcile_payments))
+            group.create_task(_new_stops())
+    finally:
+        for name, fn in callbacks:
+            event.remove(Session, name, fn)

@@ -22,6 +22,7 @@ export function fmApi(device: number, view: string, signal?: AbortSignal) {
   const base = `/file-manager/v1/devices/${device}`;
   const options = { headers: { "X-FM-View-Id": view }, signal, timeout: 10000 };
   return {
+    device,
     readiness: async () => (await client.get<FmReadiness>(`${base}/readiness`, options)).data,
     probe: async (request_id: string) => (await client.post<FmReadiness>(`${base}/readiness-probes`, {request_id}, {...options, timeout: 20000})).data,
     start: async (readiness_probe_id?: string) => (await client.post<{ lease_id: string; expires_at: string }>(`${base}/sessions`, {readiness_probe_id}, options)).data,

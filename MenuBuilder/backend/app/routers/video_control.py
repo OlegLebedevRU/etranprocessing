@@ -1883,13 +1883,11 @@ async def send_device_control_event(
 # ---------------------------------------------------------------------------
 
 
-@router.websocket("/devices/{device_id}/watch/ws")
-async def watch_device_status_ws(websocket: WebSocket, device_id: int) -> None:
-    """Relay app1 read-only invalidations without exposing its service key."""
+async def _allow_portal_watch(websocket: WebSocket) -> bool:
     # Browser credentials must remain in a cookie; never accept a URL token.
     if "token" in websocket.query_params:
         await websocket.close(code=4401)
-        return
+        return False
     origin = websocket.headers.get("origin")
     if origin:
         origin_url = urlsplit(origin)
@@ -1909,7 +1907,15 @@ async def watch_device_status_ws(websocket: WebSocket, device_id: int) -> None:
             or origin_url.fragment
         ):
             await websocket.close(code=4403)
-            return
+            return False
+    return True
+
+
+@router.websocket("/devices/{device_id}/watch/ws")
+async def watch_device_status_ws(websocket: WebSocket, device_id: int) -> None:
+    """Relay app1 read-only invalidations without exposing its service key."""
+    if not await _allow_portal_watch(websocket):
+        return
     user = await get_ws_user(websocket)
     if not user:
         await websocket.close(code=4401)
@@ -2014,20 +2020,30 @@ async def watch_device_status_ws(websocket: WebSocket, device_id: int) -> None:
                                 }
                         await websocket.send_json(notice)
 
-            tasks = [
-                asyncio.create_task(browser_to_upstream()),
-                asyncio.create_task(upstream_to_browser()),
-            ]
-            try:
-                await asyncio.wait(
-                    tasks, timeout=60, return_when=asyncio.FIRST_COMPLETED
-                )
-            finally:
-                for task in tasks:
-                    task.cancel()
-                for task in tasks:
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await task
+            from app.services import portal_changes
+
+            with portal_changes.subscribe(org_id, device_id) as watch:
+
+                async def portal_to_browser():
+                    while True:
+                        kinds = await watch.take()
+                        await websocket.send_json({"type": "change", "kinds": kinds})
+
+                tasks = [
+                    asyncio.create_task(browser_to_upstream()),
+                    asyncio.create_task(portal_to_browser()),
+                    asyncio.create_task(upstream_to_browser()),
+                ]
+                try:
+                    await asyncio.wait(
+                        tasks, timeout=60, return_when=asyncio.FIRST_COMPLETED
+                    )
+                finally:
+                    for task in tasks:
+                        task.cancel()
+                    for task in tasks:
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await task
     except TimeoutError, OSError, ValueError, websockets.exceptions.WebSocketException:
         logger.warning("Video watch upstream unavailable for device_id=%d", device_id)
     finally:
@@ -2386,3 +2402,67 @@ async def control_ws_proxy(
             click_count,
             click_results,
         )
+
+
+@router.websocket("/changes/ws")
+async def portal_watch(websocket: WebSocket, org: int, device: int | None = None):
+    """List subscriptions expose only tenant presence invalidation. File hints require device access."""
+    from app.services import portal_changes
+
+    if not await _allow_portal_watch(websocket):
+        return
+    user = await get_ws_user(websocket)
+    if (
+        not user
+        or org <= 0
+        or (not user.get("is_superuser") and resolve_org_id(user) != org)
+    ):
+        await websocket.close(code=4403)
+        return
+    terminal_pk = None
+    if device is not None:
+        try:
+            from typing import cast
+
+            from fastapi import Request
+
+            from app.routers.file_manager import fm_user
+            from app.security.permissions import require_permission
+
+            await require_permission("files:read")(cast(Request, websocket), user)
+            await fm_user(user)
+            async with async_session() as db:
+                terminal = await _verify_device_access(device, user, db)
+                terminal_pk = terminal.id
+                if terminal.org_id != org:
+                    raise HTTPException(403)
+        except HTTPException:
+            await websocket.close(code=4403)
+            return
+    role = user.get("role_id")
+    if role not in (1, 2, 3, 4, 5) or (
+        role == 4
+        and not {"*", "settings:terminals:view"}.intersection(
+            user.get("permissions") or []
+        )
+    ):
+        await websocket.close(code=4403)
+        return
+    await websocket.accept()
+    with portal_changes.subscribe(org, device, terminal_pk) as watch:
+        try:
+            async with asyncio.timeout(60):
+                while True:
+                    kinds = await watch.take()
+                    allowed = (
+                        {"presence", "sync"}
+                        if device is None
+                        else {"files", "command", "sync"}
+                    )
+                    if outgoing := sorted(set(kinds) & allowed):
+                        await websocket.send_json({"type": "change", "kinds": outgoing})
+        except TimeoutError, WebSocketDisconnect, RuntimeError:
+            pass
+        finally:
+            with contextlib.suppress(RuntimeError, OSError):
+                await websocket.close()
