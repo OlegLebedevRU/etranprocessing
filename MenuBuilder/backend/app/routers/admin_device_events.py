@@ -109,6 +109,8 @@ async def update_event(
     event = await db.get(DeviceAdminEvent, event_id, with_for_update=True)
     if event is None:
         raise HTTPException(404, "Событие не найдено")
+    if (event.status == "new") != (body.status == "new"):
+        await db.execute(select(func.pg_notify("portal_views_v1", "admin-events")))
     event.status = body.status
     event.comment = body.comment.strip()
     event.updated_by = str(user.get("username") or user.get("id") or "superuser")[:100]

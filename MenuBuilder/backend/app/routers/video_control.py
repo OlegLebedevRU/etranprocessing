@@ -2108,7 +2108,11 @@ async def watch_device_status_ws(websocket: WebSocket, device_id: int) -> None:
                 async def portal_to_browser():
                     while True:
                         kinds = await watch.take()
-                        await websocket.send_json({"type": "change", "kinds": kinds})
+                        projection, watch.quality = watch.quality, None
+                        notice: dict[str, Any] = {"type": "change", "kinds": kinds}
+                        if projection is not None:
+                            notice["quality"] = projection
+                        await websocket.send_json(notice)
 
                 tasks = [
                     asyncio.create_task(browser_to_upstream()),
@@ -2602,6 +2606,10 @@ async def portal_tab(websocket: WebSocket) -> None:
             return None
         if channel == "changes" and type(org) is int and 0 < org <= 2147483647:
             return partial(portal_watch, org=org, device=device)
+        if channel in ("admin-events", "licenses", "monitoring"):
+            from app.services.portal_views import view
+
+            return partial(view, user=user, message=message)
         if not device:
             return None
         if channel == "watch":

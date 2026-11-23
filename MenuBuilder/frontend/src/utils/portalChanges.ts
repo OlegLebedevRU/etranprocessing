@@ -1,3 +1,4 @@
+import type { RuntimeQuality } from "../api/video";
 import { openPortalChannel, type PortalChannel } from "./portalSocket";
 // Hints only wake authorized snapshot reads. A missed hint is recovered by the caller's deadline.
 type Listener = (device: number | null, kinds: string[]) => void;
@@ -59,4 +60,15 @@ export function watchChanges(org: number | null | undefined, device: number | nu
     if (entry && --entry.count === 0) { connections.delete(key); entry.close(); }
   }
   return release;
+}
+
+type QualityListener = (device: number, stream: string, at: number, value: RuntimeQuality) => void;
+const qualityListeners = new Set<QualityListener>();
+
+export function onQuality(listener: QualityListener) {
+  qualityListeners.add(listener);
+  return () => { qualityListeners.delete(listener); };
+}
+export function publishQuality(device: number, stream: string, at: number, value: RuntimeQuality) {
+  for (const listener of qualityListeners) listener(device, stream, at, value);
 }

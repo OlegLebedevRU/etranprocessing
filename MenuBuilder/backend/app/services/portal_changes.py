@@ -1,9 +1,11 @@
 """One bounded RabbitMQ subscription per BFF process; clients receive hints only."""
 
 import asyncio
+import hmac
 import json
 import logging
 import os
+import time
 from contextlib import contextmanager, suppress
 from uuid import uuid4
 
@@ -31,6 +33,7 @@ class Watch:
         self.terminal = terminal
         self.org = org
         self.device = device
+        self.quality: dict | None = None
         self.pending: set[str] = set()
         self.event = asyncio.Event()
 
@@ -84,6 +87,31 @@ def dispatch(event) -> None:
     kinds = set(raw) & KINDS
     if "feed" in kinds:
         feed_wake.set()
+    projection = event.get("quality")
+    valid_quality = False
+    if isinstance(projection, dict) and "quality" in kinds and device is not None:
+        from app.services.iot_client import iot_client
+
+        signature = event.get("signature")
+        at = projection.get("at")
+        if (
+            iot_client.service_token
+            and isinstance(signature, str)
+            and signature.isascii()
+            and isinstance(at, int)
+            and abs(time.time() * 1000 - at) <= 20000
+            and isinstance(projection.get("stream"), str)
+            and isinstance(projection.get("value"), dict)
+        ):
+            signed = json.dumps(
+                ["portal-quality-v1", org, device, projection],
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+            valid_quality = hmac.compare_digest(
+                signature,
+                hmac.digest(iot_client.service_token.encode(), signed, "sha256").hex(),
+            )
     for watch in _watches:
         if watch.org != org:
             continue
@@ -91,6 +119,8 @@ def dispatch(event) -> None:
             (device is not None and watch.device == device)
             or (terminal is not None and watch.terminal == terminal)
         ):
+            if valid_quality and watch.device == device:
+                watch.quality = projection
             watch.offer(kinds)
         elif watch.device is None and "presence" in kinds:
             watch.offer({"presence"})
@@ -125,7 +155,7 @@ async def run() -> None:
                 await queue.bind(exchange)
 
                 async def receive(message):
-                    if len(message.body) <= 512:
+                    if len(message.body) <= 4096:
                         with suppress(ValueError, UnicodeError):
                             dispatch(json.loads(message.body))
 

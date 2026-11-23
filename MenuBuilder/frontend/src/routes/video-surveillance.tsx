@@ -1,5 +1,5 @@
 import { openPortalChannel, type PortalChannel } from "../utils/portalSocket";
-import { publishChange } from "../utils/portalChanges";
+import { publishChange, publishQuality } from "../utils/portalChanges";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { linkedDevice } from "../utils/deviceSelection";
@@ -675,6 +675,8 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
           const notice = JSON.parse(event.data);
           if (notice?.type === "change" && Array.isArray(notice.kinds)) {
             publishChange(deviceId, notice.kinds);
+            const q = notice.quality;
+            if (q && typeof q.stream === "string" && Number.isSafeInteger(q.at) && typeof q.value?.available === "boolean") publishQuality(deviceId, q.stream, q.at, q.value);
             if (notice.kinds.some((k: string) => ["stream", "presence", "sync"].includes(k))) void refresh();
           }
           if (notice?.type === "invalidate") {

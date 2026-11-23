@@ -1,3 +1,4 @@
+import { watchPortalView } from "../../utils/portalSocket";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -91,7 +92,7 @@ function TerminalSubscriptionsPage() {
     }
   }, []);
   useEffect(() => {
-    void load();
+    return watchPortalView({channel: "licenses"}, load, load);
   }, [load]);
   const refreshPayment = async (id: number) => {
     setBusy(true);
@@ -107,18 +108,7 @@ function TerminalSubscriptionsPage() {
       setBusy(false);
     }
   };
-  useEffect(() => {
-    if (
-      !orders.some(
-        (o) => o.status === "pending" || o.status === "waiting_for_capture",
-      )
-    )
-      return;
-    const timer = window.setInterval(() => {
-      void load();
-    }, 15000);
-    return () => window.clearInterval(timer);
-  }, [orders, load]);
+
   const review = async (targets = selected) => {
     setBusy(true);
     try {
