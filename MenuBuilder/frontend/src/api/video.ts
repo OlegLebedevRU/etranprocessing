@@ -147,6 +147,7 @@ export interface StreamPresenceInfo {
 }
 
 export interface StreamStateResponse {
+  agent?: ControlAgentStatus | null;
   sn: string;
   stream?: StreamPresenceInfo | null;
   ingress?: VideoStatusResponse | null;
@@ -399,6 +400,22 @@ export async function stopDeviceStream(
 export async function getDeviceStreamState(deviceId: number): Promise<StreamStateResponse> {
   const { data } = await client.get<StreamStateResponse>(`/v1/video/devices/${deviceId}/stream/state`, { params: { contract_version: 3 } });
   return data;
+}
+
+// The watch consumes presence and stream state together. Admission only needs presence.
+export async function getVideoWatchSnapshot(deviceId: number, presenceOnly: boolean) {
+  if (!presenceOnly) {
+    const snapshot = await client.get<StreamStateResponse>(
+      `/v1/video/devices/${deviceId}/stream/state`,
+      { params: { contract_version: 3, watch: true } },
+    ).then(response => response.data).catch(() => null);
+    if (snapshot?.agent) return snapshot;
+    const control = await getControlStatus(deviceId).catch(() => null);
+    if (snapshot || control) return { agent: control?.agent, stream: snapshot?.stream || control?.agent?.stream };
+    return null;
+  }
+  const control = await getControlStatus(deviceId).catch(() => null);
+  return control && { agent: control.agent, stream: control.agent.stream };
 }
 
 export async function sendControlEvent(

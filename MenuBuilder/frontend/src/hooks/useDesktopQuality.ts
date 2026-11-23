@@ -13,6 +13,11 @@ export interface DesktopQualitySession {
   writerKey?: string;
 }
 
+// Reports can arrive every second. An acknowledged command needs its own immediate read.
+export function qualityReadDue(age: number, hinted: boolean, afterCommand: boolean) {
+  return afterCommand || age >= 15000 || (hinted && age >= 5000);
+}
+
 export function useDesktopQuality(session: DesktopQualitySession | null,
   readStats: () => Promise<VideoReceiveStats | null>) {
   const [quality, setQuality] = useState<RuntimeQuality | null>(null);
@@ -26,12 +31,19 @@ export function useDesktopQuality(session: DesktopQualitySession | null,
     let timer: ReturnType<typeof setTimeout> | undefined;
     let writer = !!publisher && !!lease && !!writerKey;
     let cached: RuntimeQuality | undefined, readAt = 0, revision = 0, observed = -1;
+    let readAfterCommand = false;
+    let readRetryAt = 0;
     const off = onChange(device, ["quality"], () => { revision++; });
     const tick = async () => {
       try {
-        if (!cached || observed !== revision || performance.now() - readAt >= 15000) {
+        const age = performance.now() - readAt;
+        if (performance.now() < readRetryAt) return;
+        if (!cached || qualityReadDue(age, observed !== revision, readAfterCommand)) {
           const before = revision;
+          readRetryAt = performance.now() + 5000;
           cached = await getRuntimeQuality(device, stream, abort.signal);
+          readRetryAt = 0;
+          readAfterCommand = false;
           observed = before;
           readAt = performance.now();
         }
@@ -44,7 +56,7 @@ export function useDesktopQuality(session: DesktopQualitySession | null,
           // no new handshake or mutation is implied by START-only admission.
           if (value.quality_revision && value.available && value.generation === 0
             && value.applied_kbps && value.status !== "pending" && value.status !== "unsupported") {
-            revision++;
+            readAfterCommand = true;
             await setRuntimeQuality(device, lease!, stream, value.requested_kbps ?? 0,
               writerKey!, abort.signal, undefined, value.quality_revision);
             return;
@@ -52,7 +64,7 @@ export function useDesktopQuality(session: DesktopQualitySession | null,
           const stats = await readStats();
           if (abort.signal.aborted) return;
           const target = policy.observeTarget(value, stats, performance.now());
-          if (target !== null) { revision++; await setRuntimeQuality(device, lease!, stream, target.kbps,
+          if (target !== null) { readAfterCommand = true; await setRuntimeQuality(device, lease!, stream, target.kbps,
             writerKey!, abort.signal, target.rasterStep, value.quality_revision); }
         }
       } catch (error) {

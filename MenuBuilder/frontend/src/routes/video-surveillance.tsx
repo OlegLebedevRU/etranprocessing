@@ -25,9 +25,8 @@ import {
   createVideoSession,
   DeviceInventory,
   DisplaySource,
-  getControlStatus,
   getDeviceInventory,
-  getDeviceStreamState,
+  getVideoWatchSnapshot,
   getJanusWsUrl,
   keepaliveControlLease,
   releaseControlLease,
@@ -505,17 +504,14 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
       const currentGeneration = ++inventoryGeneration.current;
       setLoadingInventory(true);
       try {
-        const [inv, stateRes, ctlStat] = await Promise.all([
+        const [inv, snapshot] = await Promise.all([
           getDeviceInventory(deviceId, refresh).catch(async () => {
             if (refresh) {
               return getDeviceInventory(deviceId, false).catch(() => ({ displays: [], cameras: [] }));
             }
             return { displays: [], cameras: [] };
           }),
-          cameraOnly && startAttemptRef.current && !startAttemptRef.current.signal.aborted
-            ? Promise.resolve(null)
-            : getDeviceStreamState(deviceId).catch(() => null),
-          getControlStatus(deviceId).catch(() => null),
+          getVideoWatchSnapshot(deviceId, Boolean(cameraOnly && startAttemptRef.current && !startAttemptRef.current.signal.aborted)),
         ]);
 
         if (currentGeneration !== inventoryGeneration.current) return;
@@ -526,8 +522,8 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
         const cameras: CameraSource[] = inv?.cameras || [];
 
         // Fallback если дисплей не вернулся, но агент сообщает screen
-        if (!cameraOnly && displays.length === 0 && ctlStat?.agent?.screen) {
-          const sc = ctlStat.agent.screen;
+        if (!cameraOnly && displays.length === 0 && snapshot?.agent?.screen) {
+          const sc = snapshot.agent.screen;
           const w = sc.virtual_width || 1920;
           const h = sc.virtual_height || 1080;
           displays.push({
@@ -546,11 +542,11 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
         setInventory(normalizedInv);
         setInventoryDeviceId(deviceId);
 
-        if (ctlStat?.agent) {
-          rcRef.current.setPresence(ctlStat.agent);
+        if (snapshot?.agent) {
+          rcRef.current.setPresence(snapshot.agent);
         }
 
-        const streamInfo = stateRes?.stream || (ctlStat?.agent as any)?.stream || null;
+        const streamInfo = snapshot?.stream || null;
         setActiveStream(streamInfo);
 
         if (streamInfo?.state === "running") {
@@ -626,18 +622,13 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
       }
       refreshing = true;
       try {
-        const [state, control] = await Promise.all([
-          cameraOnly && startAttemptRef.current && !startAttemptRef.current.signal.aborted
-            ? Promise.resolve(null)
-            : getDeviceStreamState(deviceId).catch(() => null),
-          getControlStatus(deviceId).catch(() => null),
-        ]);
+        const snapshot = await getVideoWatchSnapshot(deviceId, Boolean(cameraOnly && startAttemptRef.current && !startAttemptRef.current.signal.aborted));
         if (disposed) return;
-        if (!state && !control) throw new Error("Status endpoints unavailable");
-        if (control?.agent) rcRef.current.setPresence(control.agent);
+        if (!snapshot) throw new Error("Status endpoints unavailable");
+        if (snapshot.agent) rcRef.current.setPresence(snapshot.agent);
         // A read-only watch snapshot must not erase the pre-lease admission UI.
         if (startAttemptRef.current && !startAttemptRef.current.signal.aborted) return;
-        const stream = state?.stream || control?.agent?.stream;
+        const stream = snapshot.stream;
         const activeSession = coordinatorRef.current.session;
         if (!activeSession && terminalFailureRef.current) return;
         if (

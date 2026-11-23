@@ -575,6 +575,27 @@ async def test_get_device_stream_state_stopped_priority(
             data = resp.json()
             assert data["stream"]["state"] == "stopped"
             assert data["stream"]["reason"] == "lease_expired"
+            assert "agent" not in data
+            with (
+                patch.object(
+                    iot_client,
+                    "remote_input_status",
+                    AsyncMock(return_value=fake_status),
+                ) as status_read,
+                patch(
+                    "app.routers.video_control._get_ingress_status",
+                    new_callable=AsyncMock,
+                ) as ingress_read,
+            ):
+                snapshot = await ac.get(
+                    "/api/v1/video/devices/1/stream/state?watch=true",
+                    headers=operator_headers,
+                )
+                assert snapshot.status_code == 200
+                assert snapshot.json()["agent"]["online"]
+                assert snapshot.json()["agent"]["stream"] == data["stream"]
+                status_read.assert_awaited_once()
+                ingress_read.assert_not_awaited()
 
 
 def test_ws_proxy_drops_late_event_for_old_lease(operator_token, mock_db_session):
