@@ -35,7 +35,7 @@ Certificates service handles terminal certificate enrollment via two legacy-comp
 PIN is pre-allocated in `certificate_pins` table via the organizational billing flow —
 see [PIN-driven organizational billing](#pin-driven-organizational-billing) below and
 [`docs/history/planning-and-research/billing-cert-licensing-analysis-2026-08-18.md`](history/planning-and-research/billing-cert-licensing-analysis-2026-08-18.md).
-External CA is a Yandex Cloud Functions serverless function called over HTTPS.
+ProcessingBackend selects the issuer with `CA_SIGNER_BACKEND` (default `local`). The local issuer uses mounted signing material. The external provider uses the HTTPS serverless contract described below. See the [production certificate and configuration guide](ops_run-production-stack.md).
 Terminal does NOT have a client certificate during enrollment — auth is purely PIN-based.
 
 ---
@@ -92,6 +92,8 @@ Terminal                           Nginx (4443)             ProcessingBackend
 ---
 
 ## SETUP Flow
+
+The diagram details the external-provider branch. In local mode ProcessingBackend signs the validated CSR with the configured issuing key; the terminal-facing SETUP contract is shared.
 
 ```
 Terminal                           Nginx (4443)             ProcessingBackend          External CA
@@ -200,7 +202,7 @@ Terminal: raw Base64
 |---|---|---|
 | `CERTDATA` | PKCS#7 degenerate (certificates-only), raw Base64 | leaf cert + CA cert chain |
 
-### ProcessingBackend → External CA (HTTPS, JSON)
+### External provider only — ProcessingBackend → CA (HTTPS, JSON)
 
 **Request headers:**
 
@@ -393,7 +395,7 @@ No `X-Client-Cert-*` headers — terminal has no certificate during enrollment.
 | `CERT_VALIDITY_DAYS` | `365` | Certificate validity |
 | `SIGN_KEY` | `<secret from the private operator storage>` | Key for MD5 sign computation |
 
-### CA serverless function (env)
+### External provider only — CA serverless function (env)
 
 | Variable | Default | Description |
 |---|---|---|
