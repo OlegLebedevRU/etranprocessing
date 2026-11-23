@@ -799,12 +799,14 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
           },
         });
 
-        await client.start();
         janusClientRef.current = client;
+        await client.start();
+        if (janusClientRef.current !== client) return;
         setIsSessionActive(true);
         setStreamStage("running");
         setStatusText("Ожидание изображения");
       } catch (err: any) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
         const formatted = formatVideoError(err);
         setBannerError({ code: "viewer_connect_failed", message: formatted.message });
         message.error(formatted.message);
