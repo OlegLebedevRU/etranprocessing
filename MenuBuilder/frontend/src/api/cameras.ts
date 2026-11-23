@@ -40,7 +40,7 @@ export interface CameraSnapshot {
   received_at?: string | null;
   freshness_max_age_sec?: number; cameras: CameraState[];
   ircut?: IrcutReport;
-  media_observations?: { physical_camera_mac?: string }[];
+  media_observations?: { source_id?: string; actual_track?: unknown; physical_camera_mac?: string }[];
 }
 export interface IrcutReport {
   ircut_revision: string; methods?: number[]; camera_mac: string; boot_id: string; revision: string;

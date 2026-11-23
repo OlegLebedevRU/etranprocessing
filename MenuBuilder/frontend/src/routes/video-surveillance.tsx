@@ -53,9 +53,8 @@ import type { StreamStage } from "../components/video/StreamControls";
 import RefusalReasonCard from "../components/RefusalReasonCard";
 import { CameraSettings } from "../components/video/CameraSettings";
 import { isOpenIpcCamera } from "../utils/cameraState";
-import { getCamera } from "../api/cameras";
 import { CameraAttempt } from "../utils/cameraAttempt";
-import { admitCamera } from "../utils/cameraAdmission";
+import { admitCamera, readCameraForStart } from "../utils/cameraAdmission";
 import { browserVideoCodecs } from "../utils/browserVideoCodecs";
 import { isVideoSessionConflict, videoErrorMessage } from "../utils/videoErrors";
 
@@ -833,7 +832,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
     setRefusalNotice(null);
     setStreamStage("starting");
     setStatusText("Проверка камеры…");
-    const attempt = new CameraAttempt(cameraOnly ? 30000 : null);
+    const attempt = new CameraAttempt(cameraOnly ? 120000 : null);
     startAttemptRef.current = attempt;
     playbackAttemptRef.current = attempt;
     const deviceId = selectedDevice.device_id;
@@ -842,7 +841,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
 
     try {
       if (cameraOnly) {
-        const observation = await attempt.wait(getCamera(deviceId, attempt.signal));
+        const observation = await readCameraForStart(deviceId, attempt);
         const camera = observation.snapshot?.cameras.find(c => c.camera_id === "cam:ip000001");
         const candidates = camera?.discovery?.candidates.filter(c => c.port_verified && c.auth === "verified") ?? [];
         if (!camera?.discovery || candidates.length !== 1) throw new Error("Выберите одну подтверждённую камеру на port-2 и обновите сведения");

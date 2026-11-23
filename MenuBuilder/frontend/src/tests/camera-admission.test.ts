@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { admitCamera } from "../utils/cameraAdmission";
+import { admitCamera, readCameraForStart } from "../utils/cameraAdmission";
+import * as cameras from "../api/cameras";
 import { CameraAttempt } from "../utils/cameraAttempt";
 import type { CameraPreparation } from "../api/cameras";
 
@@ -13,6 +14,71 @@ function api() { return {
   cameraReadiness: vi.fn().mockResolvedValue({ ticket: "opaque-ready" }),
 }; }
 afterEach(() => vi.useRealTimers());
+
+describe("camera refresh on an explicit start", () => {
+  afterEach(() => vi.restoreAllMocks());
+  const verifiedCamera: cameras.CameraState = {
+    camera_id: selection.source_id,
+    discovery: { state: "ready", generation: 1, physical_port: 2, ethernet_mode: "ports",
+      candidates: [{ candidate_id: selection.physical_camera_mac, mac: selection.physical_camera_mac,
+        ip: null, port_verified: true, auth: "verified", native_api: "supported" }] },
+  };
+  it("uses a fresh source-scoped media observation from the firmware", async () => {
+    const state = { device_id: 4623, terminal_online: true, lease_active: false,
+      snapshot: { snapshot_id: "ready", received_at: new Date().toISOString(), cameras: [verifiedCamera],
+        media_observations: [{ source_id: selection.source_id, actual_track: { codec: "h264" } }] } };
+    vi.spyOn(cameras, "getCamera").mockResolvedValue(state);
+    const send = vi.spyOn(cameras, "commandCamera");
+    expect(await readCameraForStart(4623, new CameraAttempt(null))).toBe(state);
+    expect(send).not.toHaveBeenCalled();
+  });
+  it("reports missing media separately after the device verified the port", async () => {
+    const state = { device_id: 4623, terminal_online: true, lease_active: false,
+      snapshot: { snapshot_id: "read", operation_id: "task", cameras: [verifiedCamera], media_observations: [] } };
+    vi.spyOn(cameras, "getCamera").mockResolvedValue(state);
+    vi.spyOn(cameras, "commandCamera").mockResolvedValue({ id: "task" });
+    vi.spyOn(cameras, "getCameraCommand").mockResolvedValue({ id: "task", status: 3,
+      results: [{ status_code: 200, result: { snapshot_id: "read" } }] });
+    await expect(readCameraForStart(4623, new CameraAttempt(null))).rejects.toThrow("видеодорожку RTSP");
+  });
+  it("requests one read and ignores another operation's gauge", async () => {
+    vi.useFakeTimers();
+    const state = { device_id: 4623, terminal_online: true, lease_active: false };
+    const snapshot = { snapshot_id: "new", operation_id: "task", cameras: [] };
+    const read = vi.spyOn(cameras, "getCamera").mockResolvedValueOnce({ ...state, snapshot: null })
+      .mockResolvedValueOnce({ ...state, snapshot: { ...snapshot, operation_id: null } })
+      .mockResolvedValue({ ...state, snapshot });
+    const send = vi.spyOn(cameras, "commandCamera").mockResolvedValue({ id: "task" });
+    vi.spyOn(cameras, "getCameraCommand").mockResolvedValue({ id: "task", status: 3,
+      results: [{ status_code: 200, result: { snapshot_id: "new" } }] });
+    const pending = readCameraForStart(4623, new CameraAttempt(null));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect((await pending).snapshot).toEqual(snapshot);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(read).toHaveBeenCalledTimes(3);
+  });
+  it("leaves a busy camera alone", async () => {
+    vi.spyOn(cameras, "getCamera").mockResolvedValue({ device_id: 4623, terminal_online: true, lease_active: true, snapshot: null });
+    const send = vi.spyOn(cameras, "commandCamera");
+    await expect(readCameraForStart(4623, new CameraAttempt(null))).rejects.toThrow("арендой");
+    expect(send).not.toHaveBeenCalled();
+  });
+  it.each([["camera_unavailable", 2], ["auth_required", 1]])(
+    "only requests discovery after a confirmed recoverable failure (%s)", async (reason, count) => {
+      const state = { device_id: 4623, terminal_online: true, lease_active: false };
+      const snapshot = { snapshot_id: "response", operation_id: "read",
+        cameras: [{ camera_id: "cam:ip000001", capabilities: { methods: [165] } }] };
+      vi.spyOn(cameras, "getCamera").mockResolvedValueOnce({ ...state, snapshot: null })
+        .mockResolvedValueOnce({ ...state, snapshot })
+        .mockResolvedValue({ ...state, snapshot: { ...snapshot, operation_id: "search" } });
+      const send = vi.spyOn(cameras, "commandCamera").mockResolvedValueOnce({ id: "read" })
+        .mockResolvedValueOnce({ id: "search" });
+      vi.spyOn(cameras, "getCameraCommand").mockResolvedValue({ id: "read", status: 3,
+        results: [{ status_code: 502, result: { snapshot_id: "response", error: String(reason) } }] });
+      await expect(readCameraForStart(4623, new CameraAttempt(null))).rejects.toThrow(String(reason));
+      expect(send).toHaveBeenCalledTimes(Number(count));
+    });
+});
 
 describe("camera pre-lease admission", () => {
   it("orders preparation, enrollment and readiness with the captured selection", async () => {
