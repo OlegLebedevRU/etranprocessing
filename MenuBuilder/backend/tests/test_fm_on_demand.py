@@ -44,11 +44,10 @@ async def test_probe_creates_pending_before_dispatch_and_releases_portal_transac
     db = AsyncMock()
     calls = []
     identifier = uuid4()
-    monkeypatch.setattr(
-        fm,
-        "_verify_device_access",
-        AsyncMock(return_value=SimpleNamespace(org_id=7, id=41)),
-    )
+    terminal = SimpleNamespace(org_id=7, id=41)
+    # Rollback expires ORM attributes, including the primary key.
+    db.rollback.side_effect = vars(terminal).clear
+    monkeypatch.setattr(fm, "_verify_device_access", AsyncMock(return_value=terminal))
     monkeypatch.setattr(fm, "actor", lambda *a: {"X-Org-Id": "7"})
     monkeypatch.setattr(
         fm, "readiness_for", AsyncMock(return_value={"available": False})
