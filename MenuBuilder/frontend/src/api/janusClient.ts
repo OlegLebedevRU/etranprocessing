@@ -43,6 +43,7 @@ export class JanusStreamingClient {
   private keepaliveTimer: any = null;
   private pendingTransactions = new Map<string, PendingTx>();
   private isDestroyed = false;
+  private cancelOpening?: () => void;
 
   constructor(options: JanusClientOptions) {
     this.wsUrl = options.wsUrl;
@@ -155,34 +156,74 @@ export class JanusStreamingClient {
     }
   }
 
+  private openSocket(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout>;
+      let attempts = 0;
+      const cancel = () => {
+        clearTimeout(timer);
+        this.cancelOpening = undefined;
+        reject(new DOMException("Открытие плеера отменено", "AbortError"));
+      };
+      const connect = () => {
+        attempts++;
+        let ws: WebSocket;
+        try {
+          ws = new WebSocket(this.wsUrl, "janus-protocol");
+        } catch (error) {
+          this.cancelOpening = undefined;
+          reject(error);
+          return;
+        }
+        this.ws = ws;
+        const failed = () => {
+          clearTimeout(timer);
+          ws.onopen = ws.onclose = ws.onerror = null;
+          ws.close();
+          this.ws = null;
+          if (attempts === 1) {
+            timer = setTimeout(connect, 500);
+          } else {
+            this.cancelOpening = undefined;
+            reject(new Error("Медиасервер Janus не подтвердил WebSocket-соединение после двух попыток"));
+          }
+        };
+        timer = setTimeout(failed, 6000);
+        ws.onerror = ws.onclose = failed;
+        ws.onopen = () => {
+          clearTimeout(timer);
+          this.cancelOpening = undefined;
+          ws.onerror = null;
+          ws.onclose = () => {
+            if (!this.isDestroyed) this.onStatusChange?.("disconnected");
+          };
+          ws.onmessage = (event) => {
+            try {
+              this.handleMessage(JSON.parse(event.data));
+            } catch (error) {
+              console.error("Janus JSON parse error:", error);
+            }
+          };
+          resolve();
+        };
+      };
+      this.cancelOpening = () => {
+        if (this.ws) {
+          this.ws.onopen = this.ws.onclose = this.ws.onerror = null;
+          this.ws.close();
+          this.ws = null;
+        }
+        cancel();
+      };
+      connect();
+    });
+  }
+
   public async start(): Promise<void> {
     this.isDestroyed = false;
     this.onStatusChange?.("connecting");
-
-    await new Promise<void>((resolve, reject) => {
-      try {
-        this.ws = new WebSocket(this.wsUrl, "janus-protocol");
-      } catch (err) {
-        reject(err);
-        return;
-      }
-
-      this.ws.onopen = () => resolve();
-      this.ws.onerror = (e) => reject(new Error("Ошибка WebSocket соединения с Janus"));
-      this.ws.onclose = () => {
-        if (!this.isDestroyed) {
-          this.onStatusChange?.("disconnected");
-        }
-      };
-      this.ws.onmessage = (event) => {
-        try {
-          const parsed = JSON.parse(event.data);
-          this.handleMessage(parsed);
-        } catch (err) {
-          console.error("Janus JSON parse error:", err);
-        }
-      };
-    });
+    await this.openSocket();
+    if (this.isDestroyed) throw new DOMException("Открытие плеера отменено", "AbortError");
 
     // 1. Create Session
     const createResp = await this.sendTransaction({ janus: "create" });
@@ -299,6 +340,7 @@ export class JanusStreamingClient {
   public async stop(): Promise<void> {
     if (this.isDestroyed) return;
     this.isDestroyed = true;
+    this.cancelOpening?.();
 
     if (this.keepaliveTimer) {
       clearInterval(this.keepaliveTimer);
