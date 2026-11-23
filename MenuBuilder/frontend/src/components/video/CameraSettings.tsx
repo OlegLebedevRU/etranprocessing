@@ -1,3 +1,4 @@
+import { onChange, waitForChange } from "../../utils/portalChanges";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Alert, Button, Collapse, Descriptions, Drawer, Dropdown, Modal, Select, Space, Switch, Tooltip, Typography } from "antd";
@@ -14,13 +15,6 @@ import { cameraObservedFormat, cameraVideoSettings, configFresh, observationAge,
 import { cameraErrorMessage } from "../../utils/cameraErrors";
 
 type Pending = { until: number; task?: string; action?: CameraCommand["action"]; operation?: string; cancellation?: string };
-const pause = (signal: AbortSignal) => new Promise<void>((resolve, reject) => {
-  const abort = () => { clearTimeout(timer); reject(new Error("aborted")); };
-  const timer = setTimeout(() => { signal.removeEventListener("abort", abort); resolve(); }, 1000);
-  signal.addEventListener("abort", abort, { once: true });
-  if (signal.aborted) abort();
-});
-
 export function CameraSettings({ device, org, operator, viewing, freshFrames = false, onBusy, enabled = true, children,
   codecPolicy = "auto", onCodecPolicy, adaptiveQuality, onAdaptiveQuality, adaptationAvailable = false, onRefresh }: {
   device: number; org: number; operator: boolean; viewing: boolean; freshFrames?: boolean; onBusy: (busy: boolean) => void;
@@ -79,9 +73,10 @@ export function CameraSettings({ device, org, operator, viewing, freshFrames = f
           (typeof error?.response?.data?.detail === "string" ? error.response.data.detail : "Состояние камеры недоступно"));
       } finally { fetching = false; }
     };
+    const off = onChange(device, ["camera","presence","stream"], () => void load());
     void load();
-    const poll = setInterval(() => { setNow(Date.now()); void load(); }, 5000);
-    return () => { controller.abort(); clearInterval(poll); confirmation.current?.destroy(); };
+    const poll = setInterval(() => { setNow(Date.now()); void load(); }, 30000);
+    return () => { off(); controller.abort(); clearInterval(poll); confirmation.current?.destroy(); };
   }, [device, enabled]);
   const snapshot = data?.snapshot ?? null;
   const camera = snapshot?.cameras.find(item => item.camera_id === "cam:ip000001");
@@ -135,7 +130,7 @@ export function CameraSettings({ device, org, operator, viewing, freshFrames = f
           const progress = await getCamera(device, signal);
           if (!signal.aborted && progress.snapshot?.operation_id === task.id) setData(progress);
         }
-        await pause(signal);
+        await waitForChange(device, ["camera","command"], signal, 3000);
       }
       if (!result) throw new Error("Результат команды пока не подтверждён");
       const body = typeof result.result === "string" ? JSON.parse(result.result) : result.result;
@@ -149,7 +144,7 @@ export function CameraSettings({ device, org, operator, viewing, freshFrames = f
         if (state.snapshot?.operation_id === task.id && state.snapshot.snapshot_id === body.snapshot_id) {
           correlated = true; break;
         }
-        await pause(signal);
+        await waitForChange(device, ["camera","command"], signal, 3000);
       }
       if (!correlated) throw new Error("Ответ получен, но соответствующее обновление состояния камеры ещё не подтверждено");
       saved(null); accepted = false;
@@ -202,7 +197,7 @@ export function CameraSettings({ device, org, operator, viewing, freshFrames = f
             return;
           }
         } else if ([4, 5, 6, 7].includes(current.status)) break;
-        await pause(signal);
+        await waitForChange(device, ["camera","command"], signal, 3000);
       }
       throw new Error("Результат отмены пока не подтверждён. Автоматического повтора нет.");
     } catch (error: any) {

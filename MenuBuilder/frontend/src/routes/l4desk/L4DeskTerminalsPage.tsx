@@ -1,3 +1,4 @@
+import { watchChanges, onChange } from "../../utils/portalChanges";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -122,11 +123,13 @@ export default function L4DeskTerminalsPage() {
       const ok = await fetchTerminals(silent);
       if (disposed || ok === null) return;
       failures = ok ? 0 : Math.min(3, failures + 1);
-      timer = window.setTimeout(run, 30_000 * 2 ** failures + Math.random() * 3000);
+      timer = window.setTimeout(run, 90_000 * 2 ** failures + Math.random() * 3000);
     };
     const visible = () => { if (document.visibilityState === "visible") { window.clearTimeout(timer); void run(); } };
+    const release = watchChanges(user?.org_id);
+    const off = onChange(null, ["presence"], visible);
     void run(false); document.addEventListener("visibilitychange", visible);
-    return () => { disposed = true; generation.current++; abort.current?.abort(); window.clearTimeout(timer); document.removeEventListener("visibilitychange", visible); };
+    return () => { off(); release(); disposed = true; generation.current++; abort.current?.abort(); window.clearTimeout(timer); document.removeEventListener("visibilitychange", visible); };
   }, [fetchTerminals]);
   const refreshCurrent = useRef(fetchTerminals); refreshCurrent.current = fetchTerminals;
   useEffect(() => {

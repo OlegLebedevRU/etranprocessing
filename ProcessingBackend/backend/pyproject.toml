@@ -19,6 +19,7 @@ dependencies = [
     "etranprocessing-gauge",
     "etranprocessing-access==0.1.0",
     "boto3>=1.43.108",
+    "aio-pika>=9.5,<11",
 ]
 
 [tool.uv.sources]

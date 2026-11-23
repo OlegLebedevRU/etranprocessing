@@ -1,3 +1,4 @@
+import { onChange, watchChanges, waitForChange } from "../../utils/portalChanges";
 import { useCallback, useEffect, useRef, useState, type Key } from "react";
 import { Alert, Badge, Breadcrumb, Button, Card, Col, Empty, Input, Modal, Row, Space, Spin, Table, Tag, Tree, Typography, Upload } from "antd";
 import { ArrowLeftOutlined, ArrowRightOutlined, ArrowUpOutlined, DesktopOutlined, DownloadOutlined, FolderOutlined, HddOutlined, HomeOutlined, ReloadOutlined, UploadOutlined } from "@ant-design/icons";
@@ -46,7 +47,7 @@ async function wait(api: ReturnType<typeof fmApi>, id: string, signal: AbortSign
     const result = await api.status(id);
     if (result.state === expected) return result;
     if (["failed", "cancelled"].includes(result.state)) throw new Error(result.error_code || "fm_operation_failed");
-    await delay(signal);
+    await waitForChange(api.device, ["command","files"], signal, Math.min(3000, deadline - Date.now()));
   }
   throw new Error("fm_ack_timeout");
 }
@@ -66,6 +67,7 @@ function TenantFiles({ org, target }: { org: number; target?: number }) {
   const [devices, setDevices] = useState<(DeviceListItem & { terminalAddress?: string })[]>([]);
   const [availability, setAvailability] = useState<Record<number, FmReadiness>>({});
   const [device, setDevice] = useState<number | undefined>(target);
+  useEffect(() => device ? watchChanges(org, device) : undefined, [org, device]);
   const [roots, setRoots] = useState<Record<number, string[]>>({});
   const [expanded, setExpanded] = useState<Key[]>([]);
   const [path, setPath] = useState("");
@@ -171,11 +173,13 @@ function TenantFiles({ org, target }: { org: number; target?: number }) {
       finally { refreshing = false; }
     };
     refreshDevices.current = load;
-    void load(); const timer = setInterval(() => void load(), 15000);
+    const release = watchChanges(org);
+    const off = onChange(null, ["presence"], () => void load());
+    void load(); const timer = setInterval(() => void load(), 90000);
     const tick = setInterval(() => setNow(Date.now()), 1000);
     const unload = (event: BeforeUnloadEvent) => { if (current.current || locked.current || transferRef.current) { event.preventDefault(); event.returnValue = ""; } };
     window.addEventListener("beforeunload", unload);
-    return () => { mounted.current = false; controller.abort(); clearInterval(timer); clearInterval(tick); window.removeEventListener("beforeunload", unload); void close(); };
+    return () => { release(); off(); mounted.current = false; controller.abort(); clearInterval(timer); clearInterval(tick); window.removeEventListener("beforeunload", unload); void close(); };
   }, [org, target, close]);
 
   useEffect(() => {
@@ -194,7 +198,7 @@ function TenantFiles({ org, target }: { org: number; target?: number }) {
         while (current.current === active && Date.now() < deadline) {
           const state = await api.status(active.lease);
           if (state.applied_expires_at && Date.parse(state.applied_expires_at) >= Date.parse(renewed.expires_at)) { applied = true; break; }
-          await delay(active.abort.signal, 500);
+          await waitForChange(active.device, ["command","files"], active.abort.signal, Math.min(1500, deadline - Date.now()));
         }
         if (current.current === active && !applied) throw new Error("fm_ack_timeout");
       } catch (failure) {

@@ -275,14 +275,25 @@ async def probe(
         )
     # No connection is held during this finite wait; PB calls each commit/close.
     try:
+        from app.services import portal_changes
+
         async with asyncio.timeout(7):
-            for _ in range(14):
-                result = await upstream(
-                    "pb", f"/readiness-probes/{body.request_id}", headers
-                )
-                if result.get("state") != "pending":
-                    return {**result, "mqtt_available": result.get("available") is True}
-                await asyncio.sleep(0.5)
+            with portal_changes.subscribe(
+                terminal.org_id, device_id, terminal.id
+            ) as watch:
+                for _ in range(14):
+                    result = await upstream(
+                        "pb", f"/readiness-probes/{body.request_id}", headers
+                    )
+                    if result.get("state") != "pending":
+                        return {
+                            **result,
+                            "mqtt_available": result.get("available") is True,
+                        }
+                    try:
+                        await asyncio.wait_for(watch.take(), 1.5)
+                    except TimeoutError:
+                        continue
     except TimeoutError:
         raise HTTPException(409, detail={"code": "fm_probe_timeout"}) from None
     raise HTTPException(409, detail={"code": "fm_probe_timeout"})

@@ -1,3 +1,4 @@
+import { publishChange } from "../utils/portalChanges";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { admitCamera, readCameraForStart } from "../utils/cameraAdmission";
 import * as cameras from "../api/cameras";
@@ -52,7 +53,7 @@ describe("camera refresh on an explicit start", () => {
     vi.spyOn(cameras, "getCameraCommand").mockResolvedValue({ id: "task", status: 3,
       results: [{ status_code: 200, result: { snapshot_id: "new" } }] });
     const pending = readCameraForStart(4623, new CameraAttempt(null));
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(1000); publishChange(4623, ["camera"]); await vi.advanceTimersByTimeAsync(1);
     expect((await pending).snapshot).toEqual(snapshot);
     expect(send).toHaveBeenCalledTimes(1);
     expect(read).toHaveBeenCalledTimes(3);
@@ -123,7 +124,7 @@ describe("camera pre-lease admission", () => {
     await vi.advanceTimersByTimeAsync(5001);
     expect(calls.cameraReadiness).not.toHaveBeenCalled();
     calls.cameraEnrollment.mockResolvedValue({ enrolled: true });
-    await vi.advanceTimersByTimeAsync(300);
+    publishChange(4623, ["enrollment"]); await vi.advanceTimersByTimeAsync(1);
     expect(await pending).toEqual({ ticket: "opaque-ready" });
     expect(calls.prepareCamera).toHaveBeenCalledOnce();attempt.finish();
   });

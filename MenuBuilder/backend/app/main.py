@@ -91,8 +91,10 @@ async def lifespan(app: FastAPI):
         cleanup_task = asyncio.create_task(_cleanup_expired_sessions_task())
     if settings.iot_consumer_enabled:
         consumer_task = asyncio.create_task(iot_event_consumer.run_worker())
+    from app.services import portal_changes
     from app.services.subscription_worker import run_worker
 
+    change_task = asyncio.create_task(portal_changes.run())
     subscription_task = asyncio.create_task(run_worker())
     try:
         yield
@@ -105,6 +107,8 @@ async def lifespan(app: FastAPI):
             consumer_task.cancel()
             with suppress(asyncio.CancelledError):
                 await consumer_task
+        change_task.cancel()
+        await asyncio.gather(change_task, return_exceptions=True)
         if subscription_task is not None:
             subscription_task.cancel()
             with suppress(asyncio.CancelledError):

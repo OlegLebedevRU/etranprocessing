@@ -1,3 +1,4 @@
+import { onChange } from "../utils/portalChanges";
 import { useEffect, useState } from "react";
 import { getRuntimeQuality, setRuntimeQuality } from "../api/video";
 import type { RuntimeQuality } from "../api/video";
@@ -24,9 +25,17 @@ export function useDesktopQuality(session: DesktopQualitySession | null,
     const policy = new DesktopQualityPolicy();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let writer = !!publisher && !!lease && !!writerKey;
+    let cached: RuntimeQuality | undefined, readAt = 0, revision = 0, observed = -1;
+    const off = onChange(device, ["quality"], () => { revision++; });
     const tick = async () => {
       try {
-        const value = await getRuntimeQuality(device, stream, abort.signal);
+        if (!cached || observed !== revision || performance.now() - readAt >= 15000) {
+          const before = revision;
+          cached = await getRuntimeQuality(device, stream, abort.signal);
+          observed = before;
+          readAt = performance.now();
+        }
+        const value = cached;
         if (abort.signal.aborted) return;
         setQuality(value);
         if (writer) {
@@ -35,6 +44,7 @@ export function useDesktopQuality(session: DesktopQualitySession | null,
           // no new handshake or mutation is implied by START-only admission.
           if (value.quality_revision && value.available && value.generation === 0
             && value.applied_kbps && value.status !== "pending" && value.status !== "unsupported") {
+            revision++;
             await setRuntimeQuality(device, lease!, stream, value.requested_kbps ?? 0,
               writerKey!, abort.signal, undefined, value.quality_revision);
             return;
@@ -42,8 +52,8 @@ export function useDesktopQuality(session: DesktopQualitySession | null,
           const stats = await readStats();
           if (abort.signal.aborted) return;
           const target = policy.observeTarget(value, stats, performance.now());
-          if (target !== null) await setRuntimeQuality(device, lease!, stream, target.kbps,
-            writerKey!, abort.signal, target.rasterStep, value.quality_revision);
+          if (target !== null) { revision++; await setRuntimeQuality(device, lease!, stream, target.kbps,
+            writerKey!, abort.signal, target.rasterStep, value.quality_revision); }
         }
       } catch (error) {
         const status = (error as { response?: { status?: number } })?.response?.status;
@@ -55,7 +65,7 @@ export function useDesktopQuality(session: DesktopQualitySession | null,
       }
     };
     void tick();
-    return () => { abort.abort(); clearTimeout(timer); };
+    return () => { off(); abort.abort(); clearTimeout(timer); };
   }, [device, lease, stream, publisher, writerKey, readStats]);
   return quality;
 }

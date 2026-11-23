@@ -1,3 +1,4 @@
+import { waitForChange } from "./portalChanges";
 import { cameraEnrollment, cameraReadiness, commandCamera, getCamera, getCameraCommand, prepareCamera, type CameraPreparation } from "../api/cameras";
 import type { CameraAttempt } from "./cameraAttempt";
 
@@ -65,7 +66,7 @@ async function runCameraCheck(device: number, action: "refresh" | "discover", at
         return { observation: updated, error };
       }
     }
-    await attempt.wait(new Promise(resolve => setTimeout(resolve, 1000)));
+    await attempt.wait(waitForChange(device, ["command","camera"], attempt.signal, 2500));
   }
   throw new Error("Терминал не успел подтвердить новый снимок камеры");
 }
@@ -82,7 +83,7 @@ export async function admitCamera(device: number, selection: CameraPreparation, 
     const state = await attempt.wait(api.cameraEnrollment(device, prepared, attempt.signal));
     if (performance.now() >= deadline) throw new Error("Время подключения камеры истекло");
     if (state.enrolled) break;
-    await attempt.wait(new Promise(resolve => setTimeout(resolve, 250)));
+    await attempt.wait(waitForChange(device, ["enrollment"], attempt.signal, 1500));
   }
   stage("Проверка готовности терминала…");
   return attempt.wait(api.cameraReadiness(device, prepared, attempt.signal));

@@ -1,3 +1,4 @@
+import { waitForChange } from "../../utils/portalChanges";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Button, Input, Space, Typography } from "antd";
 import { changeCameraCredentials, getCamera, getCameraCommand, getCameraCredentialMetadata, type CameraCredentialChange, type CameraCredentialMetadata, type CameraState } from "../../api/cameras";
@@ -68,7 +69,7 @@ export function CameraCredentials({ device, org, camera, operator, disabled, onB
       const deadline = Date.now() + 45000;
       while (Date.now() < deadline && !signal.aborted) {
         if (await check(operation_id, action, signal)) return;
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await waitForChange(device, ["command","camera"], signal, 3000);
       }
       if (!signal.aborted) setNotice("Результат пока не подтверждён. Проверьте состояние; автоматического повтора нет.");
     } catch (error: any) {

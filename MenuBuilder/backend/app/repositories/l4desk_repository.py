@@ -742,7 +742,11 @@ class L4DeskRepository:
         )
         if tenant_id is not None:
             stmt = stmt.where(L4DeskRemoteSession.tenant_id == tenant_id)
-        stmt = stmt.order_by(L4DeskRemoteSession.id.asc()).limit(limit)
+        stmt = (
+            stmt.order_by(L4DeskRemoteSession.id.asc())
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
         res = await self.session.execute(stmt)
         return list(res.scalars().all())
 

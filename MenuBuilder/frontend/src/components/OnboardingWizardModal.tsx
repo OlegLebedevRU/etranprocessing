@@ -1,3 +1,4 @@
+import { onChange, watchChanges } from "../utils/portalChanges";
 import { useState, useEffect, useRef } from "react";
 import {
   Modal,
@@ -83,6 +84,13 @@ export default function OnboardingWizardModal({
 
   const [form] = Form.useForm();
   const pollTimerRef = useRef<number | null>(null);
+  const wakePoll = useRef<(() => void) | undefined>(undefined);
+  useEffect(() => {
+    if (!open || !pollingActive) return;
+    const release = watchChanges(orgId);
+    const off = onChange(null, ["presence"], () => wakePoll.current?.());
+    return () => { off(); release(); };
+  }, [open, orgId, pollingActive]);
   const generation = useRef(0);
   const pollingGeneration = useRef(0);
   const creating = useRef(false);
@@ -164,6 +172,7 @@ export default function OnboardingWizardModal({
     }
 
     const poll = async () => {
+      wakePoll.current = undefined;
       try {
         const resp = await getTerminalReadiness(terminalId);
         if (current !== generation.current || pollEpoch !== pollingGeneration.current) return;
@@ -180,8 +189,10 @@ export default function OnboardingWizardModal({
       } catch {
         // quiet retry
       }
-      if (current === generation.current && pollEpoch === pollingGeneration.current)
-        pollTimerRef.current = window.setTimeout(poll, 3000);
+      if (current === generation.current && pollEpoch === pollingGeneration.current) {
+        wakePoll.current = () => { window.clearTimeout(pollTimerRef.current ?? undefined); void poll(); };
+        pollTimerRef.current = window.setTimeout(poll, orgId ? 15000 : 5000);
+      }
     };
 
     void poll();

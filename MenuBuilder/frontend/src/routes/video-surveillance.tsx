@@ -1,3 +1,4 @@
+import { publishChange } from "../utils/portalChanges";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { linkedDevice } from "../utils/deviceSelection";
@@ -681,6 +682,10 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
       socket.onmessage = (event) => {
         try {
           const notice = JSON.parse(event.data);
+          if (notice?.type === "change" && Array.isArray(notice.kinds)) {
+            publishChange(deviceId, notice.kinds);
+            if (notice.kinds.some((k: string) => ["stream", "presence", "sync"].includes(k))) void refresh();
+          }
           if (notice?.type === "invalidate") {
             // A terminal hint only closes the matching local epoch. REST remains
             // authoritative for live state and every subsequent manual START.
