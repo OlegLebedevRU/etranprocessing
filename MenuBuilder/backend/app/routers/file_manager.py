@@ -251,7 +251,8 @@ async def probe(
     db: AsyncSession = Depends(get_db),
 ):
     terminal = await _verify_device_access(device_id, user, db, require_active=True)
-    headers = actor(user, terminal.org_id, x_fm_view_id)
+    org_id, terminal_id = terminal.org_id, terminal.id
+    headers = actor(user, org_id, x_fm_view_id)
     await db.rollback()
     legacy = await readiness_for(device_id, headers)
     if legacy.get("available") and "fs.readiness_on_demand" not in legacy.get(
@@ -278,9 +279,7 @@ async def probe(
         from app.services import portal_changes
 
         async with asyncio.timeout(7):
-            with portal_changes.subscribe(
-                terminal.org_id, device_id, terminal.id
-            ) as watch:
+            with portal_changes.subscribe(org_id, device_id, terminal_id) as watch:
                 for _ in range(14):
                     result = await upstream(
                         "pb", f"/readiness-probes/{body.request_id}", headers
