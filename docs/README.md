@@ -1,5 +1,7 @@
 # Документация экосистемы etranprocessing
 
+[Эксплуатация production по всем стекам](ops_run-production-stack.md) — маршруты запросов, переменные окружения, сертификаты, JWT, CI/CD и диагностика.
+
 - [Файловый менеджер по требованию](etran_arch-file-manager-on-demand-readiness.md) —
   целевой lifecycle без фонового hello/fleet readiness polling, wire additions,
   совместимый rollout и задание реализации; пока не runtime-контракт.
