@@ -16,6 +16,7 @@ from fastapi import (
     Header,
     HTTPException,
     Query,
+    Request,
     Response,
     WebSocket,
     WebSocketDisconnect,
@@ -72,6 +73,7 @@ from app.services.remote_session_metering import (
 from app.services.remote_session_policy import get_remote_session_policy
 from app.services.video_contract import (
     VideoContractOrchestrator,
+    confirmed_video_stream,
     load_video_status,
     make_stop_command,
     media_identity,
@@ -384,6 +386,8 @@ async def require_remote_control_user(
 
 async def get_ws_user(websocket: WebSocket) -> dict[str, Any] | None:
     """Authenticate WebSocket user from cookie, Authorization header, or query param."""
+    if principal := websocket.scope.get("portal_principal"):
+        return principal
     # Support test overrides
     app_instance = getattr(websocket, "app", None)
     if app_instance and hasattr(app_instance, "dependency_overrides"):
@@ -562,6 +566,62 @@ async def get_device_control_status(
     )
 
 
+def require_console_role(user: dict[str, Any]) -> None:
+    if user.get("role_id") not in (1, 5):
+        raise HTTPException(403, "Console requires role 1 or 5")
+
+
+@router.get("/console-admission", include_in_schema=False)
+async def console_admission(
+    request: Request,
+    original_uri: Annotated[str, Header(alias="X-Original-URI")],
+    user: dict[str, Any] = Depends(get_current_user),
+) -> Response:
+    from urllib.parse import parse_qs
+
+    require_console_role(user)
+    origin = urlsplit(request.headers.get("origin", ""))
+    if (
+        origin.scheme not in {"http", "https"}
+        or origin.netloc != request.headers.get("host")
+        or origin.scheme != request.headers.get("x-forwarded-proto")
+    ):
+        raise HTTPException(403)
+    if not user.get("exp"):
+        raise HTTPException(401)
+    uri = urlsplit(original_uri)
+    prefix = "/api/internal/v1/diagnostics/ws/devices/"
+    sn = uri.path.removeprefix(prefix)
+    if (
+        uri.scheme
+        or uri.netloc
+        or not uri.path.startswith(prefix)
+        or not sn
+        or "/" in sn
+    ):
+        raise HTTPException(403)
+    try:
+        query = parse_qs(uri.query, max_num_fields=8)
+        (lease,) = query["lease_id"]
+        (org,) = query["org_id"]
+        uuid.UUID(lease)
+        org_id = int(org)
+    except ValueError, KeyError:
+        raise HTTPException(403) from None
+    if org_id <= 0 or (user["role_id"] != 1 and user.get("org_id") != org_id):
+        raise HTTPException(403)
+    return Response(
+        status_code=204,
+        headers={
+            "X-Console-Expires": str(int(user["exp"])),
+            "X-Console-Org": str(org_id),
+            "X-Console-User": str(user["sub"]),
+            "X-Console-Session": str(user["session_id"]),
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 @router.post(
     "/devices/{device_id}/control/lease",
     response_model=ControlLeaseResponse,
@@ -597,11 +657,7 @@ async def acquire_device_control_lease(
     )
 
     if scope == "console":
-        if role_id not in (1, 3, 5):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Доступ к консоли разрешён ролям 1, 3 и 5",
-            )
+        require_console_role(user)
     elif scope in ("input", "stream"):
         if not is_operator:
             raise HTTPException(
@@ -1603,13 +1659,24 @@ async def keepalive_device_control_lease(
         )
         camera_context = camera_session_state_options(active_session)
         needs_checkpoint = checkpoint_due(active_session, datetime.now(UTC))
+        include_video = (
+            isinstance(active_session, L4DeskRemoteSession)
+            and active_session.session_type == "video"
+            and (
+                settings.video_contract_v2_enabled
+                or str(active_session.operation_id or "").startswith("op-stream-v2-")
+            )
+        )
         result = await iot_client.remote_input_keepalive(
             lease_id=body.lease_id,
             generation=body.generation,
             org_id=org_id,
             user=user,
             wait_ack=needs_checkpoint,
+            include_video=include_video,
+            camera_contract=camera_context.get("camera_contract"),
         )
+        renew_state = result.pop("video_state", None)
         confirmed_at = datetime.now(UTC)
         if (
             isinstance(active_session, L4DeskRemoteSession)
@@ -1618,9 +1685,16 @@ async def keepalive_device_control_lease(
             == str(result.get("stream_instance_id") or "")
         ):
             provider_status = None
-            if settings.video_contract_v2_enabled or str(
-                active_session.operation_id or ""
-            ).startswith("op-stream-v2-"):
+            if renew_state is not None:
+                stream = confirmed_video_stream(
+                    renew_state,
+                    terminal.sn,
+                    body.lease_id,
+                    camera_context.get("camera_contract"),
+                    active_session.provider_session_id,
+                )
+                provider_status = {"agent": {"stream": stream}}
+            elif include_video:
                 provider_status = await load_video_status(
                     iot_client, terminal.sn, org_id=org_id, user=user, **camera_context
                 )
@@ -2363,14 +2437,13 @@ async def control_ws_proxy(
             browser_task = asyncio.create_task(browser_to_upstream())
             upstream_task = asyncio.create_task(upstream_to_browser())
 
-            _done, pending = await asyncio.wait(
-                [browser_task, upstream_task],
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            for t in pending:
-                t.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await t
+            tasks = (browser_task, upstream_task)
+            try:
+                await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            finally:
+                for task in tasks:
+                    task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
 
     except Exception as exc:  # noqa: BLE001
         close_reason = f"connect_or_relay_error: {exc}"
@@ -2473,3 +2546,74 @@ async def portal_watch(websocket: WebSocket, org: int, device: int | None = None
         finally:
             with contextlib.suppress(RuntimeError, OSError):
                 await websocket.close()
+
+
+@router.websocket("/portal/ws")
+async def portal_tab(websocket: WebSocket) -> None:
+    from functools import partial
+
+    from app.services.portal_socket import Handler, serve
+
+    if not await _allow_portal_watch(websocket):
+        return
+    if not websocket.headers.get("origin") or not websocket.cookies.get("accessToken"):
+        await websocket.close(code=4401)
+        return
+    from typing import cast
+
+    from fastapi import Request
+
+    try:
+        user = await get_current_user(cast(Request, websocket), None)
+    except HTTPException as exc:
+        await websocket.close(code=4401 if exc.status_code == 401 else 4403)
+        return
+    expiry = user.get("exp")
+    if not user or not isinstance(expiry, (int, float)):
+        await websocket.close(code=4401)
+        return
+    lifetime = expiry - datetime.now(UTC).timestamp()
+    if lifetime <= 0:
+        await websocket.close(code=4401)
+        return
+    websocket.scope["portal_principal"] = user
+
+    async def renew(child: WebSocket, device: int, lease: str) -> None:
+        await child.accept()
+        try:
+            await require_permission(PERMISSION_VIDEO_VIEW)(cast(Request, child), user)
+            async with async_session() as db:
+                await keepalive_device_control_lease(
+                    device, KeepaliveRequest(lease_id=lease), user, db
+                )
+            await child.send_json({"status": 200})
+        except HTTPException as exc:
+            await child.send_json({"status": exc.status_code, "detail": exc.detail})
+        finally:
+            await child.close()
+
+    def resolve(message: dict) -> Handler | None:
+        device = message.get("device")
+        org = message.get("org")
+        channel = message.get("channel")
+        if device is not None and (
+            type(device) is not int or not 0 < device <= 2147483647
+        ):
+            return None
+        if channel == "changes" and type(org) is int and 0 < org <= 2147483647:
+            return partial(portal_watch, org=org, device=device)
+        if not device:
+            return None
+        if channel == "watch":
+            return partial(watch_device_status_ws, device_id=device)
+        if channel in ("control", "renew") and isinstance(message.get("lease"), str):
+            try:
+                lease_id = str(uuid.UUID(message["lease"]))
+            except ValueError:
+                return None
+            if channel == "renew":
+                return partial(renew, device=device, lease=lease_id)
+            return partial(control_ws_proxy, device_id=device, lease_id=lease_id)
+        return None
+
+    await serve(websocket, resolve, lifetime)

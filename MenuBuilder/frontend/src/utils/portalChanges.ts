@@ -1,3 +1,4 @@
+import { openPortalChannel, type PortalChannel } from "./portalSocket";
 // Hints only wake authorized snapshot reads. A missed hint is recovered by the caller's deadline.
 type Listener = (device: number | null, kinds: string[]) => void;
 const listeners = new Set<Listener>();
@@ -34,14 +35,10 @@ export function watchChanges(org: number | null | undefined, device: number | nu
   const existing = connections.get(key);
   if (existing) { existing.count++; return release; }
   let closed = false, retry = 1000;
-  let socket: WebSocket | undefined, timer: ReturnType<typeof setTimeout> | undefined;
+  let socket: PortalChannel | undefined, timer: ReturnType<typeof setTimeout> | undefined;
   const connect = () => {
     if (closed) return;
-    const url = new URL("/api/v1/video/changes/ws", location.href);
-    url.protocol = location.protocol === "https:" ? "wss:" : "ws:";
-    url.searchParams.set("org", String(org));
-    if (device !== null) url.searchParams.set("device", String(device));
-    socket = new WebSocket(url);
+    socket = openPortalChannel({ channel: "changes", org: org!, device });
     socket.onopen = () => { retry = 1000; publishChange(device, ["sync"]); };
     socket.onmessage = e => {
       try {

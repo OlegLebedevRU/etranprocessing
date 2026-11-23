@@ -843,6 +843,8 @@ class IotPlatformClient:
         org_id: int | None = None,
         user: dict[str, Any] | None = None,
         wait_ack: bool = False,
+        include_video: bool = False,
+        camera_contract: str | None = None,
     ) -> dict[str, Any]:
         """Send keepalive for lease on app1."""
         if not self.base_url or not settings.remote_control_enabled:
@@ -853,6 +855,13 @@ class IotPlatformClient:
 
         url = f"{self.base_url}/api/internal/v1/remote-input/lease/{lease_id}/keepalive"
         headers = self._get_headers(org_id=org_id, user=user)
+        params = {"wait_ack": "true"} if wait_ack else {}
+        if include_video:
+            from app.services.camera_contract import camera_headers
+
+            params["include_video"] = "true"
+            headers["X-L4-Media-Contract"] = "l4-media/3.0.0"
+            headers.update(camera_headers(camera_contract or False))
         payload = {}
         if generation is not None:
             payload["generation"] = generation
@@ -860,7 +869,7 @@ class IotPlatformClient:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(
                     url,
-                    params={"wait_ack": "true"} if wait_ack else None,
+                    params=params or None,
                     json=payload if payload else None,
                     headers=headers,
                 )
