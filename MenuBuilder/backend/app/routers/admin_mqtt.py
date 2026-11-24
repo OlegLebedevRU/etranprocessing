@@ -38,7 +38,7 @@ class Decision(BaseModel):
 
     operation_id: UUID
     ip: str = Field(max_length=45)
-    ttl: Literal[0, 900, 3600, 21600]
+    ttl: Literal[-1, 0, 900, 3600, 21600]
     reason: str = Field(min_length=3, max_length=500)
     token: str = Field(default="", max_length=64)
     acknowledged: bool = False
@@ -194,7 +194,7 @@ async def decide(body: Decision, user: dict = Depends(require_identity_superuser
                 operation_id=body.operation_id,
                 ip=ip,
                 ttl=body.ttl,
-                expiry=int(time.time()) + body.ttl if body.ttl else 0,
+                expiry=int(time.time()) + body.ttl if body.ttl > 0 else body.ttl,
                 actor=actor,
                 reason=reason,
                 preview_token=body.token,

@@ -1,5 +1,6 @@
 """Run via sudo unshare --net python3 netns_smoke.py; never touches the host table."""
 import os
+import sqlite3
 import socket
 import subprocess
 import time
@@ -37,6 +38,22 @@ def check(family,host):
             edge.apply(host,0)
             with connect(family,host,8883):
                 pass
+            # Simulate a stopped executor with an accepted permanent decision.
+            with sqlite3.connect(":memory:") as db:
+                edge.Executor(db)
+                db.execute("insert into rules values (?,?,?)", (host, 10, edge.PERMANENT))
+                edge.initialize("lo")
+                executor = edge.Executor(db)
+                assert host in executor.read()["permanent_rules"]
+                try:
+                    with connect(family,host,8883):
+                        raise AssertionError("persistent block missing after restart")
+                except TimeoutError:
+                    pass
+                executor.command(dict(ip=host, revision=11, expiry=0))
+                assert host not in executor.read()["active_rules"]
+                with connect(family,host,8883):
+                    pass
             edge.apply(host,int(time.time())+2)
             time.sleep(2.2)
             with connect(family,host,8883):

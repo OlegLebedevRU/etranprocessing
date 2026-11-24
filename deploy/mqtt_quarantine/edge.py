@@ -13,6 +13,7 @@ import subprocess
 import time
 from pathlib import Path
 
+PERMANENT = -1
 TABLE = "mb_mqtt"
 SOCKET = Path("/run/mb-mqtt-edge/control.sock")
 OBS = Path("/run/mb-mqtt-observer/observations.json")
@@ -99,12 +100,14 @@ def apply(ip, expiry):
         if ip in present:
             commands.append(f"delete element inet {TABLE} deny{family} {{ {ip} }}")
         ttl = math.ceil(expiry - time.time())
-        if ttl > 0:
+        if expiry == PERMANENT:
+            commands.append(f"add element inet {TABLE} deny{family} {{ {ip} }}")
+        elif ttl > 0:
             commands.append(f"add element inet {TABLE} deny{family} {{ {ip} timeout {ttl}s }}")
         try:
             if commands:
                 nft("-f", "-", batch="\n".join(commands) + "\n")
-            if (ip in members()[0]) != (expiry > time.time()):
+            if (ip in members()[0]) != (expiry == PERMANENT or expiry > time.time()):
                 raise RuntimeError("Verification failed")
             return
         except subprocess.CalledProcessError:
@@ -123,7 +126,7 @@ class Executor:
             "create table if not exists rules(ip text primary key, rev integer not null, expiry integer not null)"
         )
         for ip, expiry in db.execute(
-            "select ip,expiry from rules where expiry>?", (int(time.time()),)
+            "select ip,expiry from rules where expiry=? or expiry>?", (PERMANENT, int(time.time()))
         ):
             apply(ip, expiry)
 
@@ -138,14 +141,14 @@ class Executor:
             type(rev) is not int
             or rev < 1
             or type(expiry) is not int
-            or not 0 <= expiry <= time.time() + 21605
+            or not PERMANENT <= expiry <= time.time() + 21605
         ):
             raise ValueError("Invalid revision or deadline")
         old = self.db.execute("select rev,expiry from rules where ip=?", (ip,)).fetchone()
         if old and old[0] >= rev:
             if old != (rev, expiry):
                 raise Conflict("superseded")
-        elif expiry > time.time():
+        elif expiry == PERMANENT or expiry > time.time():
             if not addr.is_global or addr.is_multicast or any(addr in n for n in DENY):
                 raise Conflict("protected_address")
             info = preview(ip, json.loads(OBS.read_text()), int(time.time()))
@@ -162,7 +165,8 @@ class Executor:
 
     def read(self):
         ips, counters = members()
-        return {"active_rules": sorted(ips), "dropped_packets": sum(counters.values())}
+        permanent = [ip for (ip,) in self.db.execute("select ip from rules where expiry=?", (PERMANENT,)) if ip in ips]
+        return {"active_rules": sorted(ips), "permanent_rules": permanent, "dropped_packets": sum(counters.values())}
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
