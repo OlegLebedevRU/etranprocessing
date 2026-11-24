@@ -46,6 +46,13 @@ class ObservationTest(unittest.TestCase):
 
 
 class DecisionTest(unittest.TestCase):
+    def test_permanent_block_requires_full_validation(self):
+        with sqlite3.connect(":memory:") as db, patch.object(edge, "apply") as apply:
+            executor = edge.Executor(db)
+            with self.assertRaisesRegex(edge.Conflict, "protected_address"):
+                executor.command(dict(ip="127.0.0.1", revision=1, expiry=-1))
+            apply.assert_not_called()
+
     def test_newer_release_fences_replayed_block(self):
         db = sqlite3.connect(":memory:")
         calls = []
