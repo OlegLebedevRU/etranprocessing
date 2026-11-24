@@ -1,0 +1,20 @@
+[Unit]
+Description=Aggregate MQTT connection observations for MenuBuilder
+After=docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/mb-mqtt/collector.py
+RuntimeDirectory=mb-mqtt-observer
+RuntimeDirectoryPreserve=yes
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+RestrictAddressFamilies=AF_UNIX
+UMask=0022
+
+[Install]
+WantedBy=multi-user.target

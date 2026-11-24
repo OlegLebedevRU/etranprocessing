@@ -98,7 +98,14 @@ async def view(child: WebSocket, user: dict, message: dict) -> None:
     kind = message["channel"]
     interval = None
     try:
-        if kind == "admin-events":
+        if kind == "mqtt-admin":
+            from app.routers.admin_mqtt import observations
+
+            await require_superuser(user)
+            key = (kind,)
+            interval = 5
+            read = observations
+        elif kind == "admin-events":
             await require_superuser(user)
             key = (kind,)
 
@@ -141,7 +148,7 @@ async def view(child: WebSocket, user: dict, message: dict) -> None:
     group = groups.get(key)
     if group is None:
         group = groups[key] = Feed(key, read, interval)
-    if kind != "monitoring" and listener is None:
+    if kind in ("licenses", "admin-events") and listener is None:
         listener = asyncio.create_task(listen())
     ready = asyncio.Event()
     group.listeners.add(ready)
@@ -161,7 +168,9 @@ async def view(child: WebSocket, user: dict, message: dict) -> None:
             groups.pop(key, None)
             group.task.cancel()
             tasks = [group.task]
-            if listener is not None and all(k[0] == "monitoring" for k in groups):
+            if listener is not None and all(
+                k[0] not in ("licenses", "admin-events") for k in groups
+            ):
                 listener.cancel()
                 tasks.append(listener)
                 listener = None

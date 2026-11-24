@@ -2606,7 +2606,7 @@ async def portal_tab(websocket: WebSocket) -> None:
             return None
         if channel == "changes" and type(org) is int and 0 < org <= 2147483647:
             return partial(portal_watch, org=org, device=device)
-        if channel in ("admin-events", "licenses", "monitoring"):
+        if channel in ("admin-events", "licenses", "monitoring", "mqtt-admin"):
             from app.services.portal_views import view
 
             return partial(view, user=user, message=message)

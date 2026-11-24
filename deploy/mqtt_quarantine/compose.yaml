@@ -1,0 +1,15 @@
+services:
+  menubuilder-backend:
+    volumes:
+      - type: bind
+        source: /run/mb-mqtt-observer
+        target: /run/mb-mqtt-observer
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /run/mb-mqtt-edge
+        target: /run/mb-mqtt-edge
+        read_only: true
+        bind:
+          create_host_path: false

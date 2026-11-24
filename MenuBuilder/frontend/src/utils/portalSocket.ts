@@ -1,5 +1,5 @@
 /** One transport per authenticated tab. Logical channels retain their own lifecycle. */
-type View = { channel: "admin-events" | "licenses" } | { channel: "monitoring"; page: number; size: number; search: string };
+type View = { channel: "admin-events" | "licenses" | "mqtt-admin" } | { channel: "monitoring"; page: number; size: number; search: string };
 type Topic = View | { channel: "changes"; org: number; device: number | null }
   | { channel: "watch"; device: number }
   | { channel: "control" | "renew"; device: number; lease: string };
