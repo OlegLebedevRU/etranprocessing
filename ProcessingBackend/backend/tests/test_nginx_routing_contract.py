@@ -24,45 +24,27 @@ def test_legacy_proxy_overwrites_terminal_certificate_headers():
     assert "$http_x_client_cert" not in location
 
 
-def test_legacy_proxy_routes_payment_techgate_gategauge_to_new_backend_with_legacy_mirror():
+def test_terminal_routes_reach_processing_without_mirror():
     config = LEGACY_NGINX_CONFIG.read_text(encoding="utf-8")
+    routes = {
+        "/payment/": "/api/payment/",
+        "/payment/etran.ashx": "/api/payment/etran.ashx",
+        "/techgate/etran.ashx": "/api/techgate/etran.ashx",
+        "/GateGauge/main.ashx": "/api/gategauge",
+    }
+    for route, target in routes.items():
+        location = config.split(f"location = {route} {{", 1)[1].split("}", 1)[0]
+        assert (
+            f"proxy_pass http://new_processing_backend{target}$is_args$args;"
+            in location
+        )
 
-    # Payment
-    assert "location = /payment/ {" in config
-    assert (
-        "proxy_pass http://new_processing_backend/api/payment/$is_args$args;" in config
+    directives = [line.strip() for line in config.splitlines()]
+    assert not any(
+        line.startswith(("mirror ", "mirror_request_body ")) for line in directives
     )
-    assert "mirror /_mirror_payment;" in config
-    assert "proxy_pass http://46.38.51.114/payment/$is_args$args;" in config
-
-    # Payment etran.ashx
-    assert "location = /payment/etran.ashx {" in config
-    assert (
-        "proxy_pass http://new_processing_backend/api/payment/etran.ashx$is_args$args;"
-        in config
-    )
-    assert "mirror /_mirror_payment_etran;" in config
-    assert "proxy_pass http://46.38.51.114/payment/etran.ashx$is_args$args;" in config
-
-    # TechGate
-    assert "location = /techgate/etran.ashx {" in config
-    assert (
-        "proxy_pass http://new_processing_backend/api/techgate/etran.ashx$is_args$args;"
-        in config
-    )
-    assert "mirror /_mirror_techgate;" in config
-    assert "proxy_pass http://46.38.51.114/techgate/etran.ashx$is_args$args;" in config
-
-    # GateGauge
-    assert "location = /GateGauge/main.ashx {" in config
-    assert (
-        "proxy_pass http://new_processing_backend/api/gategauge$is_args$args;" in config
-    )
-    assert "mirror /_mirror_gategauge;" in config
-    assert "proxy_pass http://46.38.51.114/GateGauge/main.ashx$is_args$args;" in config
-
-    # Licensebilling has no mirror
-    assert "location = /_mirror_licensebilling" not in config
+    retired = config.split("location ^~ /_mirror_ {", 1)[1].split("}", 1)[0]
+    assert "return 404;" in retired
     assert "proxy_pass http://new_processing_backend/api/licensebilling/" in config
 
 
