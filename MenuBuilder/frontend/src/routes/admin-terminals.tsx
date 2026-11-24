@@ -771,6 +771,12 @@ export default function AdminTerminalsPage() {
             onClick: () => void openIdentity(record),
           },
           {
+            key: "mqtt",
+            icon: <ClusterOutlined />,
+            label: "MQTT-подключения",
+            onClick: () => navigate(`/admin/mqtt?sn=${encodeURIComponent(record.sn ?? "")}`),
+          },
+          {
             key: "goto_device_management",
             icon: <ClusterOutlined />,
             label: "Управление устройством (IoT)",

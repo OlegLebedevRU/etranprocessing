@@ -9,6 +9,7 @@ from starlette.responses import JSONResponse
 from app.config import settings
 from app.database import engine
 from app.routers import (
+    admin_mqtt,
     admin_organizations,
     admin_tenants,
     admin_terminals,
@@ -94,6 +95,8 @@ async def lifespan(app: FastAPI):
     from app.services import portal_changes
     from app.services.subscription_worker import run_worker
 
+    if admin_mqtt.OBS.parent.is_dir():
+        admin_mqtt.schedule_recovery()
     change_task = asyncio.create_task(portal_changes.run())
     subscription_task = asyncio.create_task(run_worker())
     try:
@@ -107,6 +110,9 @@ async def lifespan(app: FastAPI):
             consumer_task.cancel()
             with suppress(asyncio.CancelledError):
                 await consumer_task
+        if admin_mqtt.retry_task is not None:
+            admin_mqtt.retry_task.cancel()
+            await asyncio.gather(admin_mqtt.retry_task, return_exceptions=True)
         change_task.cancel()
         await asyncio.gather(change_task, return_exceptions=True)
         if subscription_task is not None:
@@ -165,6 +171,7 @@ from app.routers import (
 
 app.include_router(admin_identity_changes.router)
 
+app.include_router(admin_mqtt.router)
 app.include_router(admin_device_events.router)
 
 app.include_router(certificate_renewal.router)

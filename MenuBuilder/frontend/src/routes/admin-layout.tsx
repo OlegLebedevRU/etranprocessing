@@ -7,6 +7,7 @@ import { useSession } from "../session/SessionContext";
 import { useAdminDeviceEvents } from "../components/AdminDeviceEventsContext";
 
 const ADMIN_NAV_ITEMS = [
+  { key: "mqtt", icon: <DesktopOutlined />, label: "MQTT-подключения" },
   { key: "device-events", icon: <AuditOutlined />, label: "События устройств" },
   {
     key: "organizations",

@@ -1,0 +1,24 @@
+[Unit]
+Description=MenuBuilder MQTT quarantine executor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/mb-mqtt-edge.conf
+ExecStart=/usr/bin/python3 /opt/mb-mqtt/edge.py
+RuntimeDirectory=mb-mqtt-edge
+StateDirectory=mb-mqtt-edge
+RuntimeDirectoryPreserve=yes
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+CapabilityBoundingSet=CAP_NET_ADMIN
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
